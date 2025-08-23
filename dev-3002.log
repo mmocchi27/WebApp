@@ -1,0 +1,47 @@
+
+> my-v0-project@0.1.0 dev
+> next dev -p 3002
+
+   ▲ Next.js 15.2.4
+   - Local:        http://localhost:3002
+   - Network:      http://192.168.4.74:3002
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 886ms
+ ✓ Compiled /middleware in 136ms (211 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 3.6s (1231 modules)
+[v0] Publishable key value: pk_test_bG9naWNhbC1wYXJha2VldC01LmNsZXJrLmFjY291bnRzLmRldiQ
+[v0] Clerk configured: true
+ HEAD / 200 in 3878ms
+[v0] Publishable key value: pk_test_bG9naWNhbC1wYXJha2VldC01LmNsZXJrLmFjY291bnRzLmRldiQ
+[v0] Clerk configured: true
+ GET / 200 in 38ms
+ POST / 200 in 12ms
+ ✓ Compiled /dashboard in 476ms (1239 modules)
+ GET /dashboard 200 in 615ms
+ ✓ Compiled /api/subscriptions in 353ms (1429 modules)
+[v0] Fetching subscriptions from Stripe...
+ POST /dashboard 200 in 439ms
+[v0] Error fetching subscriptions: [Error: Invalid API Key provided: sk_test_***********************here] {
+  type: 'StripeAuthenticationError',
+  raw: [Object],
+  rawType: 'invalid_request_error',
+  code: undefined,
+  doc_url: undefined,
+  param: undefined,
+  detail: undefined,
+  headers: [Object],
+  requestId: undefined,
+  statusCode: 401,
+  userMessage: undefined,
+  charge: undefined,
+  decline_code: undefined,
+  payment_intent: undefined,
+  payment_method: undefined,
+  payment_method_type: undefined,
+  setup_intent: undefined,
+  source: undefined
+}
+ GET /api/subscriptions 500 in 580ms
