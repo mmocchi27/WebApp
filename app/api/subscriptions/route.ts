@@ -13,15 +13,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // For now, let's get all subscriptions and filter by metadata or handle the case
-    // where we don't have a customer ID yet. This is a temporary solution.
+    // First, find the Stripe customer for this Clerk user
+    let customerId: string | null = null
+    
+    // Search for existing customers with this Clerk user ID in metadata
+    const existingCustomers = await stripe.customers.list({
+      limit: 100,
+    })
+    
+    const customer = existingCustomers.data.find(c => 
+      c.metadata.clerkUserId === userId
+    )
+    
+    if (customer) {
+      customerId = customer.id
+    }
+
+    // If no customer exists, return empty subscriptions
+    if (!customerId) {
+      return NextResponse.json({
+        subscriptions: [],
+      })
+    }
+
+    // Get subscriptions for this specific customer
     const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
       limit: 100,
       expand: ['data.default_payment_method', 'data.latest_invoice'],
     })
 
-    // Filter subscriptions to only show active ones for now
-    // In a production app, you'd want to properly link Clerk users to Stripe customers
+    // Filter subscriptions to only show active ones
     const activeSubscriptions = subscriptions.data.filter(sub => 
       sub.status === 'active' || sub.status === 'past_due'
     )
@@ -29,21 +51,6 @@ export async function GET(request: NextRequest) {
     const formattedSubscriptions = activeSubscriptions.map((sub) => {
       // Generate order number from subscription ID
       const orderNumber = sub.id.substring(4, 12).toUpperCase()
-
-      // Log the subscription object to see what fields are available
-      console.log('Subscription object:', {
-        id: sub.id,
-        status: sub.status,
-        current_period_start: (sub as any).current_period_start,
-        current_period_end: (sub as any).current_period_end,
-        created: (sub as any).created,
-        metadata: sub.metadata,
-        // Try to access the billing cycle info
-        billing_cycle_anchor: (sub as any).billing_cycle_anchor,
-        trial_end: (sub as any).trial_end,
-        // Get the items to see pricing info
-        items: (sub as any).items?.data
-      })
 
       // Calculate the next billing date based on created date and billing cycle
       const createdDate = (sub as any).created ? new Date((sub as any).created * 1000) : null

@@ -19,16 +19,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
+    // First, verify that this subscription belongs to the authenticated user
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+    
+    // Get the customer for this subscription
+    const customer = await stripe.customers.retrieve(subscription.customer as string)
+    
+    // Check if the customer belongs to the authenticated user
+    if (customer.metadata.clerkUserId !== userId) {
+      return NextResponse.json({ error: "Unauthorized - You can only update your own subscriptions" }, { status: 403 })
+    }
+
     // Update the Stripe subscription with the new metadata
-    const subscription = await stripe.subscriptions.update(subscriptionId, {
+    const updatedSubscription = await stripe.subscriptions.update(subscriptionId, {
       metadata: metadata
     })
 
     return NextResponse.json({ 
       success: true, 
       subscription: {
-        id: subscription.id,
-        metadata: subscription.metadata
+        id: updatedSubscription.id,
+        metadata: updatedSubscription.metadata
       }
     })
 

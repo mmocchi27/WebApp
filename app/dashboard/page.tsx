@@ -26,7 +26,6 @@ export default function Dashboard() {
   const [serverNames, setServerNames] = useState<Record<string, string>>({})
   const [savingNames, setSavingNames] = useState<Set<string>>(new Set())
   const [domainLists, setDomainLists] = useState<Record<string, string>>({})
-  const [savingDomainLists, setSavingDomainLists] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (user) {
@@ -106,51 +105,7 @@ export default function Dashboard() {
     }
   }
 
-  const handleDomainListChange = (subscriptionId: string, value: string) => {
-    setDomainLists(prev => ({
-      ...prev,
-      [subscriptionId]: value
-    }))
-  }
 
-  const handleDomainListSave = async (subscriptionId: string) => {
-    const domainList = domainLists[subscriptionId]
-    if (!domainList) return
-
-    setSavingDomainLists(prev => new Set(prev).add(subscriptionId))
-    
-    try {
-      const response = await fetch('/api/update-subscription-metadata', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subscriptionId,
-          metadata: { domainList }
-        }),
-      })
-
-      if (response.ok) {
-        // Update the subscription in our state
-        setSubscriptions(prev => prev.map(sub => 
-          sub.id === subscriptionId 
-            ? { ...sub, domainList }
-            : sub
-        ))
-      } else {
-        console.error('Failed to save domain list')
-      }
-    } catch (error) {
-      console.error('Error saving domain list:', error)
-    } finally {
-      setSavingDomainLists(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(subscriptionId)
-        return newSet
-      })
-    }
-  }
 
   const formatDate = (timestamp: number) => {
     if (!timestamp || timestamp === 0) {
@@ -269,20 +224,21 @@ export default function Dashboard() {
                               <div className="text-xs text-blue-600 mt-1">Saving...</div>
                             )}
                           </div>
-                          <div>
-                            <Input
-                              value={domainLists[subscription.id] || ""}
-                              onChange={(e) => handleDomainListChange(subscription.id, e.target.value)}
-                              placeholder="Internal Use Only"
-                              className="max-w-40 text-sm"
-                              onBlur={() => handleDomainListSave(subscription.id)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleDomainListSave(subscription.id)}
-                              disabled={savingDomainLists.has(subscription.id)}
-                            />
-                            {savingDomainLists.has(subscription.id) && (
-                              <div className="text-xs text-blue-600 mt-1">Saving...</div>
-                            )}
-                          </div>
+                                                     <div>
+                             {domainLists[subscription.id] ? (
+                               <a
+                                 href={domainLists[subscription.id]}
+                                 target="_blank"
+                                 rel="noopener noreferrer"
+                                 className="text-blue-600 hover:text-blue-800 underline text-sm"
+                                 title={domainLists[subscription.id]}
+                               >
+                                 Click Here
+                               </a>
+                             ) : (
+                               <span className="text-gray-400 text-sm">—</span>
+                             )}
+                           </div>
                           <div>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(subscription.status)}`}>
                               {subscription.status}
@@ -291,16 +247,41 @@ export default function Dashboard() {
                           <div className="text-gray-600">
                             {formatDate(subscription.current_period_end)}
                           </div>
-                          <div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => router.push(`/api/cancel-subscription?subscription_id=${subscription.id}`)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
+                                                     <div>
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                               onClick={async () => {
+                                 if (confirm('Are you sure you want to cancel this subscription?')) {
+                                   try {
+                                     const response = await fetch('/api/cancel-subscription', {
+                                       method: 'POST',
+                                       headers: {
+                                         'Content-Type': 'application/json',
+                                       },
+                                       body: JSON.stringify({
+                                         subscriptionId: subscription.id
+                                       }),
+                                     })
+                                     
+                                     if (response.ok) {
+                                       // Refresh the subscriptions list
+                                       fetchSubscriptions()
+                                     } else {
+                                       const errorData = await response.json()
+                                       alert(`Failed to cancel subscription: ${errorData.error}`)
+                                     }
+                                   } catch (error) {
+                                     console.error('Error canceling subscription:', error)
+                                     alert('Failed to cancel subscription. Please try again.')
+                                   }
+                                 }
+                               }}
+                             >
+                               Cancel
+                             </Button>
+                           </div>
                         </div>
                       </AccordionTrigger>
                       <AccordionContent>

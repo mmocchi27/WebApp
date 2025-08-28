@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { auth } from "@clerk/nextjs/server"
 import Stripe from "stripe"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -7,6 +8,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { quantity, pricePerServer, totalPrice, inboxRange, sendingVolume, couponCode } = await request.json()
 
     // Enforce 1 server limit per checkout
@@ -16,6 +22,30 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Find or create a Stripe customer for this user
+    let customerId: string
+    
+    // First, try to find an existing customer
+    const existingCustomers = await stripe.customers.list({
+      limit: 100,
+    })
+    
+    const existingCustomer = existingCustomers.data.find(c => 
+      c.metadata.clerkUserId === userId
+    )
+    
+    if (existingCustomer) {
+      customerId = existingCustomer.id
+    } else {
+      // Create a new customer
+      const customer = await stripe.customers.create({
+        metadata: {
+          clerkUserId: userId,
+        },
+      })
+      customerId = customer.id
+    }
+
     const origin = request.headers.get("origin")
     const baseUrl = origin || `https://${request.headers.get("host")}`
 
@@ -23,6 +53,7 @@ export async function POST(request: NextRequest) {
     const normalizedBaseUrl = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`
 
     const sessionConfig: any = {
+      customer: customerId,
       payment_method_types: ["card"],
       line_items: [
         {
@@ -47,6 +78,7 @@ export async function POST(request: NextRequest) {
         quantity: quantity.toString(),
         inboxRange,
         sendingVolume: sendingVolume.toString(),
+        clerkUserId: userId,
       },
     }
 
