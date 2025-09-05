@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs"
 import { useEffect, useState } from "react"
+import Script from "next/script"
 
 export default function Home() {
   const [isClerkConfigured, setIsClerkConfigured] = useState(false)
@@ -333,6 +334,26 @@ export default function Home() {
           <p className="text-gray-500 text-xs mt-4">FunnelForge LLC</p>
         </div>
       </footer>
+
+      {/* Olark Chatbot - Only on landing page */}
+      <Script
+        id="olark-chatbot"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            ;(function(o,l,a,r,k,y){if(o.olark)return;
+            r="script";y=l.createElement(r);r=l.getElementsByTagName(r)[0];
+            y.async=1;y.src="//"+a;r.parentNode.insertBefore(y,r);
+            y=o.olark=function(){k.s.push(arguments);k.t.push(+new Date)};
+            y.extend=function(i,j){y("extend",i,j)};
+            y.identify=function(i){y("identify",k.i=i)};
+            y.configure=function(i,j){y("configure",i,j);k.c[i]=j};
+            k=y._={s:[],t:[+new Date],c:{},l:a};
+            })(window,document,"static.olark.com/jsclient/loader.js");
+            olark.identify('3336-644-10-4747');
+          `
+        }}
+      />
     </div>
   )
 }
