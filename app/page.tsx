@@ -192,7 +192,7 @@ export default function Home() {
                   <span className="text-sm font-medium text-gray-700">Sending Volume: 100k/month</span>
                 </div>
                 <div className="mb-6">
-                  <span className="text-4xl font-bold text-blue-600">$200</span>
+                  <span className="text-4xl font-bold text-blue-600">$250</span>
                   <span className="text-gray-600">/month/server</span>
                   <br />
                   <span className="text-sm text-gray-500">or Less than $2 an inbox</span>

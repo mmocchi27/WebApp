@@ -69,7 +69,7 @@ export default function CheckoutPage() {
         },
         body: JSON.stringify({
           quantity: quantity,
-          pricePerServer: 200,
+          pricePerServer: 250,
           totalPrice: calculateFinalPrice(),
           inboxRange: getInboxRange(),
           sendingVolume: calculateSendingVolume(),
@@ -103,7 +103,7 @@ export default function CheckoutPage() {
 
   const calculateInboxes = () => quantity * 102
   const calculateSendingVolume = () => quantity * 100
-  const calculatePrice = () => quantity * 200
+  const calculatePrice = () => quantity * 250
 
   const calculateFinalPrice = () => {
     const basePrice = calculatePrice()
@@ -205,7 +205,7 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 <div className="text-sm text-gray-600">
-                  {quantity} server{quantity > 1 ? "s" : ""} × $200/month
+                  {quantity} server{quantity > 1 ? "s" : ""} × $250/month
                 </div>
               </div>
             </CardHeader>
