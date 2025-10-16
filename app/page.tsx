@@ -82,8 +82,8 @@ export default function Home() {
             <br />
             at industry low prices
           </h1>
-          <p className="text-gray-600 text-lg mb-8 max-w-2xl mx-auto">
-            Built by a cold emailer, for cold emailers. The perfect balance of cost and performance.
+          <p className="text-blue-600 text-lg mb-8 max-w-2xl mx-auto">
+            Having issues with Google/Outlook deliverability recently? We've got you covered!
           </p>
           <div className="flex items-center justify-center gap-4 mb-8">
             <Button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md" asChild>
@@ -168,35 +168,96 @@ export default function Home() {
         </div>
       </section>
 
+      {/* No More Stress Section */}
+      <section className="py-16 px-6 bg-white">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-6">
+            No more stressing about random inbox shutdowns from Google/Outlook resellers.
+          </h2>
+          <p className="text-gray-600 text-lg leading-relaxed max-w-3xl mx-auto">
+            We control the infrastructure layer, so there is 0 risk of randomly getting shut down. You don't have to worry about your infrastructure violating the terms of service of Google or Microsoft. We are a fully compliant solution built for businesses that need a real solution.
+          </p>
+        </div>
+      </section>
+
+      {/* Warmed for Delivery Section */}
+      <section className="py-16 px-6 bg-blue-50">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-6">Warmed for delivery</h2>
+          <p className="text-gray-600 text-lg leading-relaxed max-w-3xl mx-auto">
+            All servers and IPs are warmed for multiple weeks before handing off to our customers. We still recommend 3 weeks to warm your domains, but the IP will have a solid reputation to act as your foundation for sending email.
+          </p>
+        </div>
+      </section>
+
       {/* Pricing Section */}
       <section className="py-16 px-6 bg-gray-50">
         <div className="max-w-6xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            No lock ins. Flexible payment schedules for all customers.
+            No lock ins. Month to month for all customers.
           </h2>
           <p className="text-gray-600 mb-8">
             Choose the plan that best fits your agency needs. Scale up or down
             <br />
-            as your business grows.
+            as your business grows. Seamless integration with all top sequencing tools in the market
           </p>
 
           <div className="inline-block bg-blue-600 text-white px-4 py-2 rounded-full text-sm mb-8">Most Popular</div>
 
-          <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-            {/* Plan 1 */}
-            <Card className="p-8 border border-gray-200 rounded-lg bg-white">
-              <CardContent className="text-center">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">1 - 102 Inboxes</h3>
+          <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+            {/* Plan 1 - 50 Inboxes */}
+            <Card className="p-8 border border-gray-200 rounded-lg bg-white flex flex-col">
+              <CardContent className="text-center flex flex-col flex-grow">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">50 Inboxes</h3>
+                <p className="text-gray-600 text-sm mb-4">Perfect for starting out or small teams.</p>
+                <div className="mb-4">
+                  <span className="text-sm font-medium text-gray-700">Sending Volume: 50k/month</span>
+                </div>
+                <div className="mb-6">
+                  <span className="text-4xl font-bold text-blue-600">$200</span>
+                  <span className="text-gray-600">/month</span>
+                  <br />
+                  <span className="text-sm text-gray-500">or $4.00 an inbox</span>
+                </div>
+                <div className="mt-auto">
+                <SignedOut key="pricing-signed-out-0">
+                  <SignUpButton mode="modal" forceRedirectUrl="/checkout">
+                    <Button
+                      variant="outline"
+                      className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 bg-transparent"
+                    >
+                      Get Started
+                    </Button>
+                  </SignUpButton>
+                </SignedOut>
+                <SignedIn key="pricing-signed-in-0">
+                  <Button
+                    variant="outline"
+                    className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 bg-transparent"
+                    asChild
+                  >
+                    <a href="/checkout">Get Started</a>
+                  </Button>
+                </SignedIn>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Plan 2 - 100 Inboxes */}
+            <Card className="p-8 border border-gray-200 rounded-lg bg-white flex flex-col">
+              <CardContent className="text-center flex flex-col flex-grow">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">100 Inboxes</h3>
                 <p className="text-gray-600 text-sm mb-4">Perfect for managing your own infrastructure.</p>
                 <div className="mb-4">
                   <span className="text-sm font-medium text-gray-700">Sending Volume: 100k/month</span>
                 </div>
                 <div className="mb-6">
                   <span className="text-4xl font-bold text-blue-600">$250</span>
-                  <span className="text-gray-600">/month/server</span>
+                  <span className="text-gray-600">/month</span>
                   <br />
-                  <span className="text-sm text-gray-500">or Less than $2 an inbox</span>
+                  <span className="text-sm text-gray-500">or $2.50 an inbox</span>
                 </div>
+                <div className="mt-auto">
                 <SignedOut key="pricing-signed-out-1">
                   <SignUpButton mode="modal" forceRedirectUrl="/checkout">
                     <Button
@@ -216,12 +277,14 @@ export default function Home() {
                     <a href="/checkout">Get Started</a>
                   </Button>
                 </SignedIn>
+                </div>
               </CardContent>
             </Card>
 
-            <Card className="p-8 border-2 border-blue-600 rounded-lg bg-white relative">
-              <CardContent className="text-center">
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">102+ Inboxes</h3>
+            {/* Plan 3 - 100+ Inboxes */}
+            <Card className="p-8 border-2 border-blue-600 rounded-lg bg-white relative flex flex-col">
+              <CardContent className="text-center flex flex-col flex-grow">
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">100+ Inboxes</h3>
                 <p className="text-gray-600 text-sm mb-4">
                   Ideal for established agencies or large enterprises that need high volume.
                 </p>
@@ -231,6 +294,7 @@ export default function Home() {
                 <div className="mb-6">
                   <span className="text-2xl font-bold text-blue-600">Contact us for custom pricing</span>
                 </div>
+                <div className="mt-auto">
                 <SignedOut key="pricing-signed-out-2">
                   <SignUpButton mode="modal" forceRedirectUrl="/checkout">
                     <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">Get Started</Button>
@@ -241,6 +305,7 @@ export default function Home() {
                     <a href="/checkout">Get Started</a>
                   </Button>
                 </SignedIn>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -307,7 +372,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold text-white mb-4">Ready to Get Started?</h2>
           <p className="text-blue-100 text-lg mb-8">
-            Join thousands of businesses who trust MailMountains for their email
+            Join hundreds of businesses who trust MailMountains for their email
             <br />
             needs.
           </p>
@@ -335,22 +400,21 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Olark Chatbot - Only on landing page */}
+      {/* Crisp Chatbot */}
       <Script
-        id="olark-chatbot"
+        id="crisp-chatbot"
         strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
-            ;(function(o,l,a,r,k,y){if(o.olark)return;
-            r="script";y=l.createElement(r);r=l.getElementsByTagName(r)[0];
-            y.async=1;y.src="//"+a;r.parentNode.insertBefore(y,r);
-            y=o.olark=function(){k.s.push(arguments);k.t.push(+new Date)};
-            y.extend=function(i,j){y("extend",i,j)};
-            y.identify=function(i){y("identify",k.i=i)};
-            y.configure=function(i,j){y("configure",i,j);k.c[i]=j};
-            k=y._={s:[],t:[+new Date],c:{},l:a};
-            })(window,document,"static.olark.com/jsclient/loader.js");
-            olark.identify('3336-644-10-4747');
+            window.$crisp=[];
+            window.CRISP_WEBSITE_ID="b1cdf85c-bbcb-41e4-b10c-94e80cd50461";
+            (function(){
+              d=document;
+              s=d.createElement("script");
+              s.src="https://client.crisp.chat/l.js";
+              s.async=1;
+              d.getElementsByTagName("head")[0].appendChild(s);
+            })();
           `
         }}
       />

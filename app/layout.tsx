@@ -10,7 +10,10 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "MailMountains - Professional Email Solutions",
   description: "Get Google Workspace inboxes at industry low prices. Built by cold emailers, for cold email agencies.",
-    generator: 'v0.app'
+  generator: 'v0.app',
+  icons: {
+    icon: '/icon.svg',
+  }
 }
 
 export default function RootLayout({
