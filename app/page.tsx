@@ -87,7 +87,7 @@ export default function Home() {
           </p>
           <div className="flex items-center justify-center gap-4 mb-8">
             <Button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md" asChild>
-              <a href="https://calendly.com/mitch-funnelforge/30min" target="_blank" rel="noopener noreferrer">
+              <a href="https://calendly.com/mitch-mailmountains/30min" target="_blank" rel="noopener noreferrer">
                 Book a Call
               </a>
             </Button>
@@ -377,7 +377,7 @@ export default function Home() {
             needs.
           </p>
           <Button className="bg-white text-blue-600 hover:bg-gray-100 px-8 py-3 rounded-md font-semibold" asChild>
-            <a href="https://calendly.com/mitch-funnelforge/30min" target="_blank" rel="noopener noreferrer">
+            <a href="https://calendly.com/mitch-mailmountains/30min" target="_blank" rel="noopener noreferrer">
               Book Time with Us
             </a>
           </Button>
