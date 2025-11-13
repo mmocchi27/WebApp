@@ -64,19 +64,21 @@ export default function Servers() {
         })
         
         // Merge Stripe subscriptions with database server data
-        const mergedSubscriptions = subsData.subscriptions.map((sub: Subscription) => {
-          const serverData = serverMap.get(sub.id)
-          
-          return {
-            ...sub,
-            // Use status from database if available, otherwise fall back to Stripe status
-            status: serverData?.status || sub.status,
-            // Use serverName from database if available, otherwise fall back to Stripe metadata
-            serverName: serverData?.serverName || sub.serverName,
-            // Add IP address from database
-            ipAddress: serverData?.ipAddress
-          }
-        })
+        const mergedSubscriptions = subsData.subscriptions
+          .map((sub: Subscription) => {
+            const serverData = serverMap.get(sub.id)
+            
+            return {
+              ...sub,
+              // Use status from database if available, otherwise fall back to Stripe status
+              status: serverData?.status || sub.status,
+              // Use serverName from database if available, otherwise fall back to Stripe metadata
+              serverName: serverData?.serverName || sub.serverName,
+              // Add IP address from database
+              ipAddress: serverData?.ipAddress
+            }
+          })
+          .filter((sub: Subscription) => sub.status !== 'cancelled') // Don't show cancelled servers
         
         setSubscriptions(mergedSubscriptions)
         

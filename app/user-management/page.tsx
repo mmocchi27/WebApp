@@ -25,6 +25,7 @@ export default function UserManagement() {
   const [inviteError, setInviteError] = useState("")
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null)
   const [openingBilling, setOpeningBilling] = useState(false)
+  const [permissionError, setPermissionError] = useState(false)
 
   // Fetch members and invitations when organization loads
   useEffect(() => {
@@ -34,14 +35,19 @@ export default function UserManagement() {
       }
       
       setLoadingMembers(true)
+      setPermissionError(false)
       try {
         const membershipList = await organization.getMemberships()
         setMembers(membershipList.data || [])
         
         const invitationList = await organization.getInvitations({ status: 'pending' })
         setPendingInvitations(invitationList.data || [])
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching data:', error)
+        // Check if it's a permission error
+        if (error?.message?.includes('permission') || error?.errors?.[0]?.message?.includes('permission')) {
+          setPermissionError(true)
+        }
         setMembers([])
         setPendingInvitations([])
       } finally {
@@ -214,12 +220,14 @@ export default function UserManagement() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>{organization.name} - Members</CardTitle>
-                  <Button 
-                    onClick={() => setShowInviteForm(!showInviteForm)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {showInviteForm ? "Cancel" : "Add User"}
-                  </Button>
+                  {!permissionError && (
+                    <Button 
+                      onClick={() => setShowInviteForm(!showInviteForm)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {showInviteForm ? "Cancel" : "Add User"}
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -283,7 +291,17 @@ export default function UserManagement() {
                 )}
 
                 {/* Members List */}
-                {loadingMembers ? (
+                {permissionError ? (
+                  <div className="text-center py-12">
+                    <div className="mb-4">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <p className="text-lg font-medium text-gray-900 mb-2">Admin Access Required</p>
+                    <p className="text-gray-600">Only the admin of this organization can see the members list and their respective roles.</p>
+                  </div>
+                ) : loadingMembers ? (
                   <div className="text-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
                     <p className="text-gray-600">Loading members...</p>

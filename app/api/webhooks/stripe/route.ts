@@ -106,13 +106,50 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   console.log("Subscription updated:", subscription.id)
   
-  // Handle any subscription updates if needed
-  // For example, updating server status, sending notifications, etc.
+  try {
+    // Check if subscription is being cancelled (scheduled for end of period)
+    if (subscription.cancel_at_period_end) {
+      console.log(`Subscription ${subscription.id} is scheduled for cancellation`)
+      
+      // Update server status to 'cancelled'
+      const result = await prisma.server.updateMany({
+        where: { subscriptionId: subscription.id },
+        data: { 
+          status: 'cancelled',
+          updatedAt: new Date()
+        }
+      })
+      
+      if (result.count > 0) {
+        console.log(`✅ Server status updated to 'cancelled' for subscription ${subscription.id}`)
+      } else {
+        console.log(`⚠️  No server found for subscription ${subscription.id}`)
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error handling subscription update:', error)
+  }
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   console.log("Subscription deleted:", subscription.id)
   
-  // Handle subscription cancellation
-  // For example, deactivating servers, sending cancellation emails, etc.
+  try {
+    // Update the server status to 'cancelled' in the database
+    const result = await prisma.server.updateMany({
+      where: { subscriptionId: subscription.id },
+      data: { 
+        status: 'cancelled',
+        updatedAt: new Date()
+      }
+    })
+    
+    if (result.count > 0) {
+      console.log(`✅ Server status updated to 'cancelled' for subscription ${subscription.id}`)
+    } else {
+      console.log(`⚠️  No server found for subscription ${subscription.id}`)
+    }
+  } catch (error) {
+    console.error('❌ Error updating server status on cancellation:', error)
+  }
 }
