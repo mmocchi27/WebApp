@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import Stripe from "stripe"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -8,9 +8,27 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth()
+    const { userId, orgId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Get user's organization
+    let organizationId = orgId
+    
+    if (!organizationId) {
+      const client = await clerkClient()
+      const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
+      if (orgMemberships.data && orgMemberships.data.length > 0) {
+        organizationId = orgMemberships.data[0].organization.id
+      }
+    }
+
+    // User must have an organization to create subscriptions
+    if (!organizationId) {
+      return NextResponse.json({ 
+        error: "You must be part of an organization to create a subscription. Please refresh the page." 
+      }, { status: 400 })
     }
 
     const { quantity, pricePerServer, totalPrice, inboxRange, sendingVolume, couponCode } = await request.json()
@@ -22,25 +40,44 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Find or create a Stripe customer for this user
+    // Find or create a Stripe customer for this organization
     let customerId: string
     
-    // First, try to find an existing customer
+    // First, try to find an existing customer by org ID
     const existingCustomers = await stripe.customers.list({
       limit: 100,
     })
     
-    const existingCustomer = existingCustomers.data.find(c => 
-      c.metadata.clerkUserId === userId
+    let existingCustomer = existingCustomers.data.find(c => 
+      c.metadata.clerkOrgId === organizationId
     )
+    
+    // If no org-based customer found, check for legacy user-based customer and migrate it
+    if (!existingCustomer) {
+      existingCustomer = existingCustomers.data.find(c => 
+        c.metadata.clerkUserId === userId
+      )
+      
+      // If found legacy customer, update it with org ID
+      if (existingCustomer) {
+        await stripe.customers.update(existingCustomer.id, {
+          metadata: {
+            clerkUserId: userId, // Keep for backwards compatibility
+            clerkOrgId: organizationId, // Add org ID
+          },
+        })
+        customerId = existingCustomer.id
+      }
+    }
     
     if (existingCustomer) {
       customerId = existingCustomer.id
     } else {
-      // Create a new customer
+      // Create a new customer with both user and org IDs
       const customer = await stripe.customers.create({
         metadata: {
           clerkUserId: userId,
+          clerkOrgId: organizationId,
         },
       })
       customerId = customer.id
@@ -72,13 +109,14 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "subscription",
-      success_url: `${normalizedBaseUrl}/dashboard?success=true`,
+      success_url: `${normalizedBaseUrl}/servers?success=true`,
       cancel_url: `${normalizedBaseUrl}/checkout?canceled=true`,
       metadata: {
         quantity: quantity.toString(),
         inboxRange,
         sendingVolume: sendingVolume.toString(),
         clerkUserId: userId,
+        clerkOrgId: organizationId,
       },
     }
 

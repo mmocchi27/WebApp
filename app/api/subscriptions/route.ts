@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import Stripe from "stripe"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -8,22 +8,44 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth()
+    const { userId, orgId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // First, find the Stripe customer for this Clerk user
+    // Get user's organization (either from auth or fetch first org)
+    let organizationId = orgId
+    
+    if (!organizationId) {
+      const client = await clerkClient()
+      const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
+      if (orgMemberships.data && orgMemberships.data.length > 0) {
+        organizationId = orgMemberships.data[0].organization.id
+      }
+    }
+
+    // First, find the Stripe customer for this organization or user
     let customerId: string | null = null
     
-    // Search for existing customers with this Clerk user ID in metadata
+    // Search for existing customers with this Clerk org ID or user ID in metadata
     const existingCustomers = await stripe.customers.list({
       limit: 100,
     })
     
-    const customer = existingCustomers.data.find(c => 
-      c.metadata.clerkUserId === userId
-    )
+    // Priority 1: Try to find by organization ID (new model)
+    let customer = null
+    if (organizationId) {
+      customer = existingCustomers.data.find(c => 
+        c.metadata.clerkOrgId === organizationId
+      )
+    }
+    
+    // Priority 2: Fall back to user ID (legacy model for backwards compatibility)
+    if (!customer) {
+      customer = existingCustomers.data.find(c => 
+        c.metadata.clerkUserId === userId
+      )
+    }
     
     if (customer) {
       customerId = customer.id
@@ -63,6 +85,7 @@ export async function GET(request: NextRequest) {
         orderNumber,
         serverName: sub.metadata.serverName || null,
         domainList: sub.metadata.domainList || null,
+        ipAddress: sub.metadata.ipAddress || null,
       }
     })
 

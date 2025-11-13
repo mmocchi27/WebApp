@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { headers } from "next/headers"
+import { prisma } from "@/lib/prisma"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-07-30.basil",
@@ -70,9 +71,31 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   console.log("Subscription created:", subscription.id)
   
-  // Ensure the subscription metadata includes the Clerk user ID
-  if (subscription.metadata.clerkUserId) {
-    console.log(`Subscription ${subscription.id} linked to Clerk user ${subscription.metadata.clerkUserId}`)
+  // Ensure the subscription metadata includes the Clerk user ID or Org ID
+  const clerkOrgId = subscription.metadata.clerkOrgId
+  const clerkUserId = subscription.metadata.clerkUserId
+  
+  if (clerkOrgId || clerkUserId) {
+    console.log(`Subscription ${subscription.id} linked to Clerk org ${clerkOrgId} or user ${clerkUserId}`)
+    
+    // Create a server record in the database
+    try {
+      const organizationId = clerkOrgId || clerkUserId // Use org ID first, fall back to user ID
+      
+      await prisma.server.create({
+        data: {
+          subscriptionId: subscription.id,
+          organizationId: organizationId,
+          status: 'pending', // Will be updated to 'active' when admin assigns IP
+          ipAddress: null,
+          apiKey: null
+        }
+      })
+      
+      console.log(`Server record created for subscription ${subscription.id}`)
+    } catch (error) {
+      console.error('Error creating server record:', error)
+    }
   }
 }
 
