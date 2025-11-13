@@ -71,31 +71,35 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   console.log("Subscription created:", subscription.id)
   
-  // Ensure the subscription metadata includes the Clerk user ID or Org ID
-  const clerkOrgId = subscription.metadata.clerkOrgId
-  const clerkUserId = subscription.metadata.clerkUserId
-  
-  if (clerkOrgId || clerkUserId) {
-    console.log(`Subscription ${subscription.id} linked to Clerk org ${clerkOrgId} or user ${clerkUserId}`)
+  try {
+    // Get the customer to find Clerk IDs (stored in customer metadata, not subscription)
+    const customer = await stripe.customers.retrieve(subscription.customer as string)
+    
+    const clerkOrgId = customer.metadata.clerkOrgId
+    const clerkUserId = customer.metadata.clerkUserId
+    const organizationId = clerkOrgId || clerkUserId // Use org ID first, fall back to user ID
+    
+    if (!organizationId) {
+      console.log(`No Clerk ID found for subscription ${subscription.id}`)
+      return
+    }
+    
+    console.log(`Subscription ${subscription.id} linked to Clerk ${organizationId}`)
     
     // Create a server record in the database
-    try {
-      const organizationId = clerkOrgId || clerkUserId // Use org ID first, fall back to user ID
-      
-      await prisma.server.create({
-        data: {
-          subscriptionId: subscription.id,
-          organizationId: organizationId,
-          status: 'pending', // Will be updated to 'active' when admin assigns IP
-          ipAddress: null,
-          apiKey: null
-        }
-      })
-      
-      console.log(`Server record created for subscription ${subscription.id}`)
-    } catch (error) {
-      console.error('Error creating server record:', error)
-    }
+    await prisma.server.create({
+      data: {
+        subscriptionId: subscription.id,
+        organizationId: organizationId,
+        status: 'pending', // Will be updated to 'active' when admin assigns IP
+        ipAddress: null,
+        apiKey: null
+      }
+    })
+    
+    console.log(`✅ Server record created for subscription ${subscription.id}`)
+  } catch (error) {
+    console.error('❌ Error creating server record:', error)
   }
 }
 
