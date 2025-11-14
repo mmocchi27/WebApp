@@ -137,13 +137,19 @@ export default function Billing() {
         </div>
       </div>
 
-      {/* Servers Button - Fixed Top Left */}
-      <div className="fixed top-8 left-8">
+      {/* Top Left Navigation Buttons */}
+      <div className="fixed top-8 left-8 flex flex-col gap-4">
         <Button
           onClick={() => router.push("/servers")}
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
         >
           Servers
+        </Button>
+        <Button
+          onClick={() => router.push("/domains")}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
+        >
+          Domains
         </Button>
       </div>
 

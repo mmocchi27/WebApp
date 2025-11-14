@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 })
     }
 
-    const { subscriptionId, organizationId, serverName, ipAddress, apiKey, status } = await request.json()
+    const { subscriptionId, organizationId, serverName, ipAddress, apiKey, hostname, status } = await request.json()
 
     if (!subscriptionId || !organizationId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
           serverName: serverName !== undefined ? serverName : existingServer.serverName,
           ipAddress: ipAddress !== undefined ? ipAddress : existingServer.ipAddress,
           apiKey: apiKey !== undefined ? apiKey : existingServer.apiKey,
+          hostname: hostname !== undefined ? hostname : existingServer.hostname,
           status: status || existingServer.status,
           updatedAt: new Date()
         }
@@ -62,15 +63,22 @@ export async function POST(request: NextRequest) {
           serverName: serverName || null,
           ipAddress: ipAddress || null,
           apiKey: apiKey || null,
+          hostname: hostname || null,
           status: status || 'pending'
         }
       })
     }
 
     return NextResponse.json({ success: true, server })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error managing server:", error)
-    return NextResponse.json({ error: "Failed to manage server" }, { status: 500 })
+    console.error("Error message:", error.message)
+    console.error("Error stack:", error.stack)
+    return NextResponse.json({ 
+      error: "Failed to manage server",
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }, { status: 500 })
   }
 }
 

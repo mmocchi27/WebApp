@@ -15,6 +15,7 @@ interface Server {
   serverName: string | null
   ipAddress: string | null
   apiKey: string | null
+  hostname: string | null
   status: string
   createdAt: string
   updatedAt: string
@@ -26,7 +27,7 @@ export default function AdminServers() {
   const [servers, setServers] = useState<Server[]>([])
   const [loading, setLoading] = useState(true)
   const [editingServer, setEditingServer] = useState<string | null>(null)
-  const [formData, setFormData] = useState<{[key: string]: {serverName: string, ipAddress: string, apiKey: string, status: string}}>({})
+  const [formData, setFormData] = useState<{[key: string]: {serverName: string, ipAddress: string, apiKey: string, hostname: string, status: string}}>({})
 
   // Check if user is admin
   useEffect(() => {
@@ -56,12 +57,13 @@ export default function AdminServers() {
         setServers(data.servers)
         
         // Initialize form data
-        const initialFormData: {[key: string]: {serverName: string, ipAddress: string, apiKey: string, status: string}} = {}
+        const initialFormData: {[key: string]: {serverName: string, ipAddress: string, apiKey: string, hostname: string, status: string}} = {}
         data.servers.forEach((server: Server) => {
           initialFormData[server.id] = {
             serverName: server.serverName || '',
             ipAddress: server.ipAddress || '',
             apiKey: server.apiKey || '',
+            hostname: server.hostname || '',
             status: server.status
           }
         })
@@ -87,6 +89,7 @@ export default function AdminServers() {
           serverName: formData[serverId].serverName,
           ipAddress: formData[serverId].ipAddress,
           apiKey: formData[serverId].apiKey,
+          hostname: formData[serverId].hostname,
           status: formData[serverId].status
         }),
       })
@@ -96,15 +99,17 @@ export default function AdminServers() {
         setEditingServer(null)
         fetchServers()
       } else {
-        alert('Failed to update server')
+        const errorData = await response.json()
+        console.error('Server update error:', errorData)
+        alert(`Failed to update server: ${errorData.details || errorData.error}`)
       }
     } catch (error) {
       console.error('Error updating server:', error)
-      alert('Failed to update server')
+      alert('Failed to update server: ' + error)
     }
   }
 
-  const handleChange = (serverId: string, field: 'serverName' | 'ipAddress' | 'apiKey' | 'status', value: string) => {
+  const handleChange = (serverId: string, field: 'serverName' | 'ipAddress' | 'apiKey' | 'hostname' | 'status', value: string) => {
     setFormData(prev => ({
       ...prev,
       [serverId]: {
@@ -165,12 +170,13 @@ export default function AdminServers() {
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subscription ID</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Organization ID</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider max-w-[100px]">ID</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider max-w-[120px]">Sub ID</th>
+                      <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider max-w-[120px]">Org ID</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server Name</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP Address</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">API Key</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hostname</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Updated At</th>
@@ -180,9 +186,9 @@ export default function AdminServers() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {servers.map((server) => (
                       <tr key={server.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-mono text-gray-900">{server.id.substring(0, 8)}...</td>
-                        <td className="px-4 py-3 text-sm font-mono text-gray-900">{server.subscriptionId}</td>
-                        <td className="px-4 py-3 text-sm font-mono text-gray-900">{server.organizationId}</td>
+                        <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[100px]">{server.id}</td>
+                        <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[120px]">{server.subscriptionId}</td>
+                        <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[120px]">{server.organizationId}</td>
                         <td className="px-4 py-3 text-sm">
                           {editingServer === server.id ? (
                             <Input
@@ -218,6 +224,18 @@ export default function AdminServers() {
                             />
                           ) : (
                             <span className="font-mono">{server.apiKey ? '••••••••' : '-'}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {editingServer === server.id ? (
+                            <Input
+                              value={formData[server.id]?.hostname || ''}
+                              onChange={(e) => handleChange(server.id, 'hostname', e.target.value)}
+                              placeholder="mail.example.com"
+                              className="w-full"
+                            />
+                          ) : (
+                            <span className="font-mono">{server.hostname || '-'}</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm">

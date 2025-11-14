@@ -20,9 +20,34 @@ model Server {
   serverName      String?  @map("server_name")
   ipAddress       String?  @map("ip_address")
   apiKey          String?  @map("api_key")
+  hostname        String?  @map("hostname")
   status          String   @default("pending")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  domains         Domain[]
 
   @@map("servers")
+}
+
+model Domain {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  domainName        String   @map("domain_name")
+  serverId          String   @map("server_id") @db.Uuid
+  cloudflareZoneId  String?  @map("cloudflare_zone_id")
+  cloudflareStatus  String   @default("pending") @map("cloudflare_status")
+  nameservers       Json?    @map("nameservers")
+  dnsConfigured     Boolean  @default(false) @map("dns_configured")
+  masterDomain      String?  @map("master_domain")
+  redirectConfigured Boolean @default(false) @map("redirect_configured")
+  mxRecord          String?  @map("mx_record")
+  spfRecord         String?  @map("spf_record")
+  dmarcRecord       String?  @map("dmarc_record")
+  dkimRecord        String?  @map("dkim_record")
+  lastCheckedAt     DateTime? @map("last_checked_at") @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  server            Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([domainName, serverId])
+  @@map("domains")
 }
