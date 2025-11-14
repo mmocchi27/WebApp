@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
       },
       select: {
         subscriptionId: true,
+        serverName: true,
+        ipAddress: true,
       },
     })
 
@@ -51,6 +53,9 @@ export async function GET(request: NextRequest) {
         subscriptions: [],
       })
     }
+
+    // Build map of subscriptionId -> server data for easy lookup
+    const serverMap = new Map(orgServers.map(server => [server.subscriptionId, server]))
 
     // Get ALL subscriptions from Stripe that match our org's subscription IDs
     const allSubscriptions: Stripe.Subscription[] = []
@@ -78,14 +83,16 @@ export async function GET(request: NextRequest) {
       const createdDate = (sub as any).created ? new Date((sub as any).created * 1000) : null
       const nextBillingDate = createdDate ? new Date(createdDate.getTime() + (30 * 24 * 60 * 60 * 1000)) : null
 
+      const serverData = serverMap.get(sub.id)
+
       return {
         id: sub.id,
         status: sub.status,
         current_period_end: (sub as any).current_period_end || (nextBillingDate ? Math.floor(nextBillingDate.getTime() / 1000) : 0),
         orderNumber,
-        serverName: sub.metadata.serverName || null,
+        serverName: serverData?.serverName || sub.metadata.serverName || null,
         domainList: sub.metadata.domainList || null,
-        ipAddress: sub.metadata.ipAddress || null,
+        ipAddress: serverData?.ipAddress || sub.metadata.ipAddress || null,
       }
     })
 
