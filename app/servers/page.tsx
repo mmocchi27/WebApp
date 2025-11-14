@@ -36,7 +36,9 @@ export default function Servers() {
   const [ipAddresses, setIpAddresses] = useState<Record<string, string>>({})
   const [showOrgCreation, setShowOrgCreation] = useState(false)
   const [openingBilling, setOpeningBilling] = useState(false)
+  const [editingServerIds, setEditingServerIds] = useState<Set<string>>(new Set())
   const lastOrgIdRef = useRef<string | null>(null)
+  const editingServerIdsRef = useRef<Set<string>>(new Set())
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -97,7 +99,15 @@ export default function Servers() {
           if (sub.ipAddress) ips[sub.id] = sub.ipAddress
         })
         
-        setServerNames(names)
+        setServerNames(prev => {
+          const merged = { ...names }
+          editingServerIdsRef.current.forEach(id => {
+            if (prev[id] !== undefined) {
+              merged[id] = prev[id]
+            }
+          })
+          return merged
+        })
         setDomainLists(lists)
         setIpAddresses(ips)
       }
@@ -136,6 +146,26 @@ export default function Servers() {
     }
   }, [user, organization, orgLoaded, listLoaded, userMemberships, setActive, fetchSubscriptions])
 
+  const startEditingServer = (subscriptionId: string) => {
+    setEditingServerIds(prev => {
+      if (prev.has(subscriptionId)) return prev
+      const newSet = new Set(prev)
+      newSet.add(subscriptionId)
+      editingServerIdsRef.current = newSet
+      return newSet
+    })
+  }
+
+  const stopEditingServer = (subscriptionId: string) => {
+    setEditingServerIds(prev => {
+      if (!prev.has(subscriptionId)) return prev
+      const newSet = new Set(prev)
+      newSet.delete(subscriptionId)
+      editingServerIdsRef.current = newSet
+      return newSet
+    })
+  }
+
   const handleServerNameChange = (subscriptionId: string, value: string) => {
     setServerNames(prev => ({
       ...prev,
@@ -143,9 +173,14 @@ export default function Servers() {
     }))
   }
 
-  const handleServerNameSave = async (subscriptionId: string) => {
+  const handleServerNameSave = async (subscriptionId: string, exitEditing = false) => {
     const serverName = serverNames[subscriptionId]
-    if (!serverName) return
+    if (!serverName) {
+      if (exitEditing) {
+        stopEditingServer(subscriptionId)
+      }
+      return
+    }
 
     setSavingNames(prev => new Set(prev).add(subscriptionId))
     
@@ -179,6 +214,9 @@ export default function Servers() {
         newSet.delete(subscriptionId)
         return newSet
       })
+      if (exitEditing) {
+        stopEditingServer(subscriptionId)
+      }
     }
   }
 
@@ -382,8 +420,14 @@ export default function Servers() {
                         onChange={(e) => handleServerNameChange(subscription.id, e.target.value)}
                         placeholder="e.g., Production Server"
                         className="text-gray-600 text-center bg-transparent border-none outline-none focus:text-gray-900 focus:underline w-full"
-                        onBlur={() => handleServerNameSave(subscription.id)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleServerNameSave(subscription.id)}
+                        onFocus={() => startEditingServer(subscription.id)}
+                        onBlur={() => handleServerNameSave(subscription.id, true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleServerNameSave(subscription.id, true)
+                          }
+                        }}
                         disabled={savingNames.has(subscription.id)}
                       />
                       {savingNames.has(subscription.id) && (
