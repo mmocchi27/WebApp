@@ -36,6 +36,18 @@ export default function Servers() {
   const [ipAddresses, setIpAddresses] = useState<Record<string, string>>({})
   const [showOrgCreation, setShowOrgCreation] = useState(false)
   const [openingBilling, setOpeningBilling] = useState(false)
+  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
+
+  // Force page refresh when org changes
+  useEffect(() => {
+    if (organization && lastOrgId && organization.id !== lastOrgId) {
+      // Org switched - force full page reload
+      window.location.reload()
+    }
+    if (organization) {
+      setLastOrgId(organization.id)
+    }
+  }, [organization?.id])
 
   useEffect(() => {
     if (user && orgLoaded && listLoaded) {

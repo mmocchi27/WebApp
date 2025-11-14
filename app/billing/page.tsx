@@ -1,17 +1,29 @@
 "use client"
 
-import { useUser, OrganizationSwitcher } from "@clerk/nextjs"
+import { useUser, useOrganization, OrganizationSwitcher } from "@clerk/nextjs"
 import { UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 export default function Billing() {
   const { user } = useUser()
+  const { organization } = useOrganization()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
+
+  // Force page refresh when org changes
+  useEffect(() => {
+    if (organization && lastOrgId && organization.id !== lastOrgId) {
+      window.location.reload()
+    }
+    if (organization) {
+      setLastOrgId(organization.id)
+    }
+  }, [organization?.id])
 
   const handleOpenPortal = async () => {
     setLoading(true)

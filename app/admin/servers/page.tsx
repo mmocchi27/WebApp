@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser, OrganizationSwitcher } from "@clerk/nextjs"
+import { useUser, useOrganization, OrganizationSwitcher } from "@clerk/nextjs"
 import { UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -23,11 +23,23 @@ interface Server {
 
 export default function AdminServers() {
   const { user, isLoaded } = useUser()
+  const { organization } = useOrganization()
   const router = useRouter()
   const [servers, setServers] = useState<Server[]>([])
   const [loading, setLoading] = useState(true)
+  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
   const [editingServer, setEditingServer] = useState<string | null>(null)
   const [formData, setFormData] = useState<{[key: string]: {serverName: string, ipAddress: string, apiKey: string, hostname: string, status: string}}>({})
+
+  // Force page refresh when org changes
+  useEffect(() => {
+    if (organization && lastOrgId && organization.id !== lastOrgId) {
+      window.location.reload()
+    }
+    if (organization) {
+      setLastOrgId(organization.id)
+    }
+  }, [organization?.id])
 
   // Check if user is admin
   useEffect(() => {

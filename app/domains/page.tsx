@@ -102,8 +102,19 @@ export default function Domains() {
   const [showDeleteDomainModal, setShowDeleteDomainModal] = useState(false)
   const [selectedDomainsToDelete, setSelectedDomainsToDelete] = useState<Set<string>>(new Set())
   const [deletingDomains, setDeletingDomains] = useState(false)
+  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
   const successfulAddedDomains = addedDomains.filter(item => item.status === 'success')
   const successfulAddedDomainNames = successfulAddedDomains.map(item => item.domain)
+
+  // Force page refresh when org changes
+  useEffect(() => {
+    if (organization && lastOrgId && organization.id !== lastOrgId) {
+      window.location.reload()
+    }
+    if (organization) {
+      setLastOrgId(organization.id)
+    }
+  }, [organization?.id])
 
   useEffect(() => {
     if (user && orgLoaded) {

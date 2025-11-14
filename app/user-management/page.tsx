@@ -26,6 +26,17 @@ export default function UserManagement() {
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null)
   const [openingBilling, setOpeningBilling] = useState(false)
   const [permissionError, setPermissionError] = useState(false)
+  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
+
+  // Force page refresh when org changes
+  useEffect(() => {
+    if (organization && lastOrgId && organization.id !== lastOrgId) {
+      window.location.reload()
+    }
+    if (organization) {
+      setLastOrgId(organization.id)
+    }
+  }, [organization?.id])
 
   // Fetch members and invitations when organization loads
   useEffect(() => {
