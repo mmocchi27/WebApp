@@ -31,7 +31,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const { quantity, pricePerServer, totalPrice, inboxRange, sendingVolume, couponCode } = await request.json()
+    const { quantity, serverName, pricePerServer, totalPrice, inboxRange, sendingVolume, couponCode } = await request.json()
+
+    // Validate server name
+    if (!serverName || !serverName.trim()) {
+      return NextResponse.json({ 
+        error: "Server name is required." 
+      }, { status: 400 })
+    }
 
     // Enforce 1 server limit per checkout
     if (quantity > 1) {
@@ -113,6 +120,7 @@ export async function POST(request: NextRequest) {
       cancel_url: `${normalizedBaseUrl}/checkout?canceled=true`,
       metadata: {
         quantity: quantity.toString(),
+        serverName: serverName.trim(),
         inboxRange,
         sendingVolume: sendingVolume.toString(),
         clerkUserId: userId,

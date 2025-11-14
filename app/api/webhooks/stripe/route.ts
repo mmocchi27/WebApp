@@ -86,18 +86,28 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     
     console.log(`Subscription ${subscription.id} linked to Clerk ${organizationId}`)
     
+    // Get the checkout session to retrieve serverName from metadata
+    const sessions = await stripe.checkout.sessions.list({
+      subscription: subscription.id,
+      limit: 1,
+    })
+    
+    const serverName = sessions.data[0]?.metadata?.serverName || null
+    console.log(`Server name from checkout: ${serverName}`)
+    
     // Create a server record in the database
     await prisma.server.create({
       data: {
         subscriptionId: subscription.id,
         organizationId: organizationId,
+        serverName: serverName,
         status: 'pending', // Will be updated to 'active' when admin assigns IP
         ipAddress: null,
         apiKey: null
       }
     })
     
-    console.log(`✅ Server record created for subscription ${subscription.id}`)
+    console.log(`✅ Server record created for subscription ${subscription.id} with name: ${serverName}`)
   } catch (error) {
     console.error('❌ Error creating server record:', error)
   }

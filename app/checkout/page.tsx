@@ -9,6 +9,7 @@ import { useState } from "react"
 export default function CheckoutPage() {
   const router = useRouter()
   const [quantity, setQuantity] = useState(1)
+  const [serverName, setServerName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
@@ -58,6 +59,12 @@ export default function CheckoutPage() {
   }
 
   const handlePurchase = async () => {
+    // Validate server name is provided
+    if (!serverName.trim()) {
+      setCheckoutError("Please enter a server name before proceeding.")
+      return
+    }
+
     setIsLoading(true)
     setCheckoutError("")
 
@@ -69,6 +76,7 @@ export default function CheckoutPage() {
         },
         body: JSON.stringify({
           quantity: quantity,
+          serverName: serverName.trim(),
           pricePerServer: 250,
           totalPrice: calculateFinalPrice(),
           inboxRange: getInboxRange(),
@@ -210,6 +218,18 @@ export default function CheckoutPage() {
               </div>
             </CardHeader>
             <CardContent>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Server Name *</label>
+                <Input
+                  type="text"
+                  placeholder="e.g., Production Server, Dev Server"
+                  value={serverName}
+                  onChange={(e) => setServerName(e.target.value)}
+                  className="w-full"
+                  required
+                />
+              </div>
+
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Coupon Code (Optional)</label>
                 {appliedCoupon ? (
