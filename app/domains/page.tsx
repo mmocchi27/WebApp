@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser, UserButton, useOrganization } from "@clerk/nextjs"
+import { useUser, UserButton, useOrganization, OrganizationSwitcher } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -617,7 +617,14 @@ export default function Domains() {
               <span className="font-semibold text-gray-900">MailMountains</span>
             </div>
           </div>
-          <UserButton afterSignOutUrl="/" />
+          <div className="flex items-center gap-4">
+            <OrganizationSwitcher 
+              hidePersonal={true}
+              afterSelectOrganizationUrl="/domains"
+              afterCreateOrganizationUrl="/domains"
+            />
+            <UserButton afterSignOutUrl="/" />
+          </div>
         </div>
 
         {/* Page Title */}

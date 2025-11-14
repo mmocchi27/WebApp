@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser, useOrganization, CreateOrganization } from "@clerk/nextjs"
+import { useUser, useOrganization, useOrganizationList, CreateOrganization, OrganizationSwitcher } from "@clerk/nextjs"
 import { UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,11 @@ interface Subscription {
 export default function Servers() {
   const { user } = useUser()
   const { organization, isLoaded: orgLoaded } = useOrganization()
+  const { userMemberships, isLoaded: listLoaded, setActive } = useOrganizationList({
+    userMemberships: {
+      infinite: true,
+    },
+  })
   const router = useRouter()
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,17 +38,32 @@ export default function Servers() {
   const [openingBilling, setOpeningBilling] = useState(false)
 
   useEffect(() => {
-    if (user && orgLoaded) {
-      if (!organization) {
-        // No organization - show creation modal
-        setShowOrgCreation(true)
-        setLoading(false)
+    if (user && orgLoaded && listLoaded) {
+      // Check if user is a member of ANY organizations
+      const hasOrgs = userMemberships && userMemberships.data && userMemberships.data.length > 0
+      
+      if (!hasOrgs) {
+        // User is not a member of any org - show creation modal ONLY after checking
+        // Add small delay to prevent flash
+        setTimeout(() => {
+          setShowOrgCreation(true)
+          setLoading(false)
+        }, 100)
+      } else if (!organization) {
+        // User has orgs but no active org - set the first one as active
+        const firstOrg = userMemberships.data[0].organization
+        setActive({ organization: firstOrg.id })
+          .then(() => {
+            // Force reload after setting active org
+            window.location.reload()
+          })
       } else {
-        // Has organization - fetch subscriptions normally
+        // Has active organization - fetch subscriptions normally
+        setShowOrgCreation(false)
         fetchSubscriptions()
       }
     }
-  }, [user, organization, orgLoaded])
+  }, [user, organization, orgLoaded, listLoaded, userMemberships, setActive])
 
   const fetchSubscriptions = async () => {
     try {
@@ -203,8 +223,10 @@ export default function Servers() {
     }
   }
 
-  // Show org creation modal if no organization exists
-  if (showOrgCreation && !organization) {
+  // Show org creation modal ONLY if user is not a member of any orgs
+  // Also ensure we're done loading before showing it
+  const hasOrgs = userMemberships && userMemberships.data && userMemberships.data.length > 0
+  if (showOrgCreation && !hasOrgs && !loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="w-full max-w-4xl px-4 sm:px-6 lg:px-8">
@@ -237,7 +259,6 @@ export default function Servers() {
               <CardContent className="py-8 flex justify-center">
                 <div className="w-full max-w-md">
                   <CreateOrganization 
-                    afterCreateOrganizationUrl="/servers"
                     skipInvitationScreen={true}
                   />
                 </div>
@@ -301,6 +322,11 @@ export default function Servers() {
             >
               Provision Dedicated Server
             </Button>
+            <OrganizationSwitcher 
+              hidePersonal={true}
+              afterSelectOrganizationUrl="/servers"
+              afterCreateOrganizationUrl="/servers"
+            />
             <UserButton afterSignOutUrl="/" />
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser } from "@clerk/nextjs"
+import { useUser, OrganizationSwitcher } from "@clerk/nextjs"
 import { UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -149,7 +149,14 @@ export default function AdminServers() {
               <span className="font-semibold text-gray-900">MailMountains Admin</span>
             </div>
           </div>
-          <UserButton afterSignOutUrl="/" />
+          <div className="flex items-center gap-4">
+            <OrganizationSwitcher 
+              hidePersonal={true}
+              afterSelectOrganizationUrl="/admin/servers"
+              afterCreateOrganizationUrl="/admin/servers"
+            />
+            <UserButton afterSignOutUrl="/" />
+          </div>
         </div>
 
         {/* Page Title */}

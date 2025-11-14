@@ -1,6 +1,6 @@
 "use client"
 
-import { useUser, useOrganization, CreateOrganization } from "@clerk/nextjs"
+import { useUser, useOrganization, CreateOrganization, OrganizationSwitcher } from "@clerk/nextjs"
 import { UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -190,13 +190,20 @@ export default function UserManagement() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Button 
+              <Button
                 onClick={() => router.push("/servers")}
                 variant="outline"
               >
                 Back to Servers
               </Button>
-              <UserButton afterSignOutUrl="/" />
+              <div className="flex items-center gap-4">
+                <OrganizationSwitcher 
+                  hidePersonal={true}
+                  afterSelectOrganizationUrl="/user-management"
+                  afterCreateOrganizationUrl="/user-management"
+                />
+                <UserButton afterSignOutUrl="/" />
+              </div>
             </div>
           </div>
 
