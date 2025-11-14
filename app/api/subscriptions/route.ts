@@ -24,49 +24,49 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // First, find the Stripe customer for this organization or user
-    let customerId: string | null = null
-    
-    // Search for existing customers with this Clerk org ID or user ID in metadata
-    const existingCustomers = await stripe.customers.list({
-      limit: 100,
-    })
-    
-    // Priority 1: Try to find by organization ID (new model)
-    let customer = null
-    if (organizationId) {
-      customer = existingCustomers.data.find(c => 
-        c.metadata.clerkOrgId === organizationId
-      )
-    }
-    
-    // Priority 2: Fall back to user ID (legacy model for backwards compatibility)
-    if (!customer) {
-      customer = existingCustomers.data.find(c => 
-        c.metadata.clerkUserId === userId
-      )
-    }
-    
-    if (customer) {
-      customerId = customer.id
-    }
-
-    // If no customer exists, return empty subscriptions
-    if (!customerId) {
+    // User must have an organization to view subscriptions
+    if (!organizationId) {
       return NextResponse.json({
         subscriptions: [],
       })
     }
 
-    // Get subscriptions for this specific customer
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customerId,
-      limit: 100,
-      expand: ['data.default_payment_method', 'data.latest_invoice'],
+    // Get all subscription IDs for this organization from the database
+    // This ensures we only show subscriptions that belong to THIS org
+    const { prisma } = await import("@/lib/prisma")
+    const orgServers = await prisma.server.findMany({
+      where: {
+        organizationId: organizationId,
+      },
+      select: {
+        subscriptionId: true,
+      },
     })
 
+    const orgSubscriptionIds = new Set(orgServers.map(s => s.subscriptionId))
+
+    // If no subscriptions for this org, return empty
+    if (orgSubscriptionIds.size === 0) {
+      return NextResponse.json({
+        subscriptions: [],
+      })
+    }
+
+    // Get ALL subscriptions from Stripe that match our org's subscription IDs
+    const allSubscriptions: Stripe.Subscription[] = []
+    for (const subId of orgSubscriptionIds) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(subId, {
+          expand: ['default_payment_method', 'latest_invoice'],
+        })
+        allSubscriptions.push(subscription)
+      } catch (error) {
+        console.error(`Failed to retrieve subscription ${subId}:`, error)
+      }
+    }
+
     // Filter subscriptions to only show active ones
-    const activeSubscriptions = subscriptions.data.filter(sub => 
+    const activeSubscriptions = allSubscriptions.filter(sub => 
       sub.status === 'active' || sub.status === 'past_due'
     )
 

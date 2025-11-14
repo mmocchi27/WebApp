@@ -20,18 +20,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch servers for BOTH org ID (if exists) AND user ID
-    // This handles both new servers (with org ID) and legacy servers (with user ID)
-    const whereConditions = []
-    
-    if (organizationId) {
-      whereConditions.push({ organizationId: organizationId })
+    // User must have an organization to view servers
+    if (!organizationId) {
+      return NextResponse.json({ servers: [] })
     }
-    whereConditions.push({ organizationId: userId })
 
+    // Fetch servers ONLY for this specific organization
     const servers = await prisma.server.findMany({
       where: {
-        OR: whereConditions
+        organizationId: organizationId
       },
       orderBy: {
         createdAt: 'desc'
