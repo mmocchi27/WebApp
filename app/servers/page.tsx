@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { useRouter } from "next/navigation"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 
 interface Subscription {
   id: string
@@ -49,35 +49,7 @@ export default function Servers() {
     }
   }, [organization?.id])
 
-  useEffect(() => {
-    if (user && orgLoaded && listLoaded) {
-      // Check if user is a member of ANY organizations
-      const hasOrgs = userMemberships && userMemberships.data && userMemberships.data.length > 0
-      
-      if (!hasOrgs) {
-        // User is not a member of any org - show creation modal ONLY after checking
-        // Add small delay to prevent flash
-        setTimeout(() => {
-          setShowOrgCreation(true)
-          setLoading(false)
-        }, 100)
-      } else if (!organization) {
-        // User has orgs but no active org - set the first one as active
-        const firstOrg = userMemberships.data[0].organization
-        setActive({ organization: firstOrg.id })
-          .then(() => {
-            // Force reload after setting active org
-            window.location.reload()
-          })
-      } else {
-        // Has active organization - fetch subscriptions normally
-        setShowOrgCreation(false)
-        fetchSubscriptions()
-      }
-    }
-  }, [user?.id, organization?.id, orgLoaded, listLoaded])
-
-  const fetchSubscriptions = async () => {
+  const fetchSubscriptions = useCallback(async () => {
     try {
       // Fetch subscriptions from Stripe
       const subsResponse = await fetch('/api/subscriptions')
@@ -125,15 +97,7 @@ export default function Servers() {
           if (sub.ipAddress) ips[sub.id] = sub.ipAddress
         })
         
-        // Only update server names if not already set (preserve user edits)
-        setServerNames(prev => {
-          const merged = { ...names }
-          // Keep any existing values from prev (user edits)
-          Object.keys(prev).forEach(key => {
-            if (prev[key]) merged[key] = prev[key]
-          })
-          return merged
-        })
+        setServerNames(names)
         setDomainLists(lists)
         setIpAddresses(ips)
       }
@@ -142,7 +106,35 @@ export default function Servers() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (user && orgLoaded && listLoaded) {
+      // Check if user is a member of ANY organizations
+      const hasOrgs = userMemberships && userMemberships.data && userMemberships.data.length > 0
+      
+      if (!hasOrgs) {
+        // User is not a member of any org - show creation modal ONLY after checking
+        // Add small delay to prevent flash
+        setTimeout(() => {
+          setShowOrgCreation(true)
+          setLoading(false)
+        }, 100)
+      } else if (!organization) {
+        // User has orgs but no active org - set the first one as active
+        const firstOrg = userMemberships.data[0].organization
+        setActive({ organization: firstOrg.id })
+          .then(() => {
+            // Force reload after setting active org
+            window.location.reload()
+          })
+      } else {
+        // Has active organization - fetch subscriptions normally
+        setShowOrgCreation(false)
+        fetchSubscriptions()
+      }
+    }
+  }, [user, organization, orgLoaded, listLoaded, userMemberships, setActive, fetchSubscriptions])
 
   const handleServerNameChange = (subscriptionId: string, value: string) => {
     setServerNames(prev => ({
