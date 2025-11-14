@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 interface Server {
   id: string
@@ -27,17 +27,17 @@ export default function AdminServers() {
   const router = useRouter()
   const [servers, setServers] = useState<Server[]>([])
   const [loading, setLoading] = useState(true)
-  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
+  const lastOrgIdRef = useRef<string | null>(null)
   const [editingServer, setEditingServer] = useState<string | null>(null)
   const [formData, setFormData] = useState<{[key: string]: {serverName: string, ipAddress: string, apiKey: string, hostname: string, status: string}}>({})
 
   // Force page refresh when org changes
   useEffect(() => {
-    if (organization && lastOrgId && organization.id !== lastOrgId) {
-      window.location.reload()
-    }
     if (organization) {
-      setLastOrgId(organization.id)
+      if (lastOrgIdRef.current && lastOrgIdRef.current !== organization.id) {
+        window.location.reload()
+      }
+      lastOrgIdRef.current = organization.id
     }
   }, [organization?.id])
 

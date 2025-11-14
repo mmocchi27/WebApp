@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 interface Subscription {
   id: string
@@ -36,16 +36,16 @@ export default function Servers() {
   const [ipAddresses, setIpAddresses] = useState<Record<string, string>>({})
   const [showOrgCreation, setShowOrgCreation] = useState(false)
   const [openingBilling, setOpeningBilling] = useState(false)
-  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
+  const lastOrgIdRef = useRef<string | null>(null)
 
   // Force page refresh when org changes
   useEffect(() => {
-    if (organization && lastOrgId && organization.id !== lastOrgId) {
-      // Org switched - force full page reload
-      window.location.reload()
-    }
     if (organization) {
-      setLastOrgId(organization.id)
+      if (lastOrgIdRef.current && lastOrgIdRef.current !== organization.id) {
+        // Org switched - force full page reload
+        window.location.reload()
+      }
+      lastOrgIdRef.current = organization.id
     }
   }, [organization?.id])
 

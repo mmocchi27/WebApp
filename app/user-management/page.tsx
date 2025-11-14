@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 export default function UserManagement() {
   const { user } = useUser()
@@ -26,15 +26,15 @@ export default function UserManagement() {
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null)
   const [openingBilling, setOpeningBilling] = useState(false)
   const [permissionError, setPermissionError] = useState(false)
-  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
+  const lastOrgIdRef = useRef<string | null>(null)
 
   // Force page refresh when org changes
   useEffect(() => {
-    if (organization && lastOrgId && organization.id !== lastOrgId) {
-      window.location.reload()
-    }
     if (organization) {
-      setLastOrgId(organization.id)
+      if (lastOrgIdRef.current && lastOrgIdRef.current !== organization.id) {
+        window.location.reload()
+      }
+      lastOrgIdRef.current = organization.id
     }
   }, [organization?.id])
 

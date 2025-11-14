@@ -5,7 +5,7 @@ import { UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 export default function Billing() {
   const { user } = useUser()
@@ -13,15 +13,15 @@ export default function Billing() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [lastOrgId, setLastOrgId] = useState<string | null>(null)
+  const lastOrgIdRef = useRef<string | null>(null)
 
   // Force page refresh when org changes
   useEffect(() => {
-    if (organization && lastOrgId && organization.id !== lastOrgId) {
-      window.location.reload()
-    }
     if (organization) {
-      setLastOrgId(organization.id)
+      if (lastOrgIdRef.current && lastOrgIdRef.current !== organization.id) {
+        window.location.reload()
+      }
+      lastOrgIdRef.current = organization.id
     }
   }, [organization?.id])
 
