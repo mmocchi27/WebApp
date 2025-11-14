@@ -75,7 +75,7 @@ export default function Servers() {
         fetchSubscriptions()
       }
     }
-  }, [user, organization, orgLoaded, listLoaded, userMemberships, setActive])
+  }, [user?.id, organization?.id, orgLoaded, listLoaded])
 
   const fetchSubscriptions = async () => {
     try {
@@ -125,7 +125,15 @@ export default function Servers() {
           if (sub.ipAddress) ips[sub.id] = sub.ipAddress
         })
         
-        setServerNames(names)
+        // Only update server names if not already set (preserve user edits)
+        setServerNames(prev => {
+          const merged = { ...names }
+          // Keep any existing values from prev (user edits)
+          Object.keys(prev).forEach(key => {
+            if (prev[key]) merged[key] = prev[key]
+          })
+          return merged
+        })
         setDomainLists(lists)
         setIpAddresses(ips)
       }
