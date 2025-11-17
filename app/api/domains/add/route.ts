@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (error: any) {
       console.error(`Error creating Cloudflare zone for ${domain}:`, error.message)
+      console.error('Full Cloudflare error:', JSON.stringify(error.response?.data, null, 2))
       
       // Check if zone already exists
       if (error.response?.data?.errors?.[0]?.code === 1061) {
