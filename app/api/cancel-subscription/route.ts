@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, clerkClient } from "@clerk/nextjs/server"
 import Stripe from "stripe"
+import { cleanupSubscriptionResources } from "@/lib/serverCleanup"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-07-30.basil",
@@ -49,6 +50,19 @@ export async function POST(request: NextRequest) {
     const canceledSubscription = await stripe.subscriptions.cancel(subscriptionId)
 
     console.log("[v0] Subscription canceled:", canceledSubscription.id)
+
+    try {
+      await cleanupSubscriptionResources(subscriptionId)
+    } catch (cleanupError) {
+      console.error("[v0] Cleanup failed after cancellation:", cleanupError)
+      return NextResponse.json(
+        {
+          error: "Subscription canceled but cleanup failed",
+          details: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        },
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json({
       success: true,

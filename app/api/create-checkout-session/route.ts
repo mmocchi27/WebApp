@@ -40,6 +40,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
+    const normalizedServerName = serverName.trim()
+
     // Enforce 1 server limit per checkout
     if (quantity > 1) {
       return NextResponse.json({ 
@@ -120,11 +122,19 @@ export async function POST(request: NextRequest) {
       cancel_url: `${normalizedBaseUrl}/checkout?canceled=true`,
       metadata: {
         quantity: quantity.toString(),
-        serverName: serverName.trim(),
+        serverName: normalizedServerName,
         inboxRange,
         sendingVolume: sendingVolume.toString(),
         clerkUserId: userId,
         clerkOrgId: organizationId,
+      },
+      subscription_data: {
+        metadata: {
+          serverName: normalizedServerName,
+          clerkUserId: userId,
+          clerkOrgId: organizationId,
+        },
+        description: normalizedServerName,
       },
     }
 

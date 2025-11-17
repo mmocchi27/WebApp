@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth, clerkClient } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
+import { cleanupServerResources } from "@/lib/serverCleanup"
 
 // Helper function to check if user is admin
 async function isAdmin(userId: string): Promise<boolean> {
@@ -42,6 +43,10 @@ export async function POST(request: NextRequest) {
 
     let server
     if (existingServer) {
+      const statusNormalized = status?.toLowerCase()
+      const wasCancelled = existingServer.status?.toLowerCase() === "cancelled"
+      const shouldTriggerCleanup = statusNormalized === "cancelled" && !wasCancelled
+
       // Update existing server
       server = await prisma.server.update({
         where: { id: existingServer.id },
@@ -54,6 +59,23 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date()
         }
       })
+
+      if (shouldTriggerCleanup) {
+        try {
+          await cleanupServerResources({
+            id: server.id,
+            subscriptionId: server.subscriptionId,
+            ipAddress: server.ipAddress,
+            apiKey: server.apiKey,
+          })
+        } catch (error: any) {
+          console.error("Error cleaning up server resources:", error)
+          return NextResponse.json(
+            { error: "Failed to clean up server resources", details: error.message },
+            { status: 500 }
+          )
+        }
+      }
     } else {
       // Create new server
       server = await prisma.server.create({

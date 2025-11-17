@@ -46,6 +46,8 @@ interface Subscription {
   serverName?: string
 }
 
+const MAX_DOMAINS_PER_SERVER = 34
+
 interface Domain {
   id?: string
   domain_name: string
@@ -61,6 +63,7 @@ interface Domain {
   dmarcRecord?: string
   dkimRecord?: string
   lastCheckedAt?: string
+  inboxCount?: number
   [key: string]: any // MailCow returns various other fields
 }
 
@@ -134,6 +137,29 @@ export default function Domains() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedServerId])
 
+  const storageKey = organization?.id ? `selectedServer_${organization.id}` : null
+  useEffect(() => {
+    if (!storageKey || selectedServerId) return
+    if (typeof window !== "undefined") {
+      const storedId = localStorage.getItem(storageKey)
+      if (storedId) {
+        setSelectedServerId(storedId)
+      }
+    }
+  }, [storageKey, selectedServerId])
+
+
+  useEffect(() => {
+    if (!storageKey) return
+    if (selectedServerId) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(storageKey, selectedServerId)
+      }
+    } else if (typeof window !== "undefined") {
+      localStorage.removeItem(storageKey)
+    }
+  }, [selectedServerId, storageKey])
+
   const fetchSubscriptions = async () => {
     try {
       const response = await fetch("/api/subscriptions")
@@ -144,10 +170,18 @@ export default function Domains() {
           (sub: Subscription) => sub.status !== "cancelled"
         )
         setSubscriptions(activeSubscriptions)
-        // Auto-select first server if available
-        if (activeSubscriptions.length > 0) {
-          setSelectedServerId(activeSubscriptions[0].id)
-        }
+        setSelectedServerId(prevId => {
+          if (prevId && activeSubscriptions.some(sub => sub.id === prevId)) {
+            return prevId
+          }
+          if (storageKey && typeof window !== "undefined") {
+            const storedId = localStorage.getItem(storageKey)
+            if (storedId && activeSubscriptions.some(sub => sub.id === storedId)) {
+              return storedId
+            }
+          }
+          return activeSubscriptions.length > 0 ? activeSubscriptions[0].id : ""
+        })
       }
     } catch (error) {
       console.error("Error fetching subscriptions:", error)
@@ -229,6 +263,7 @@ export default function Domains() {
     setDnsError("")
     
     let updatedCount = 0
+    const statusCounts: Record<string, number> = {}
     
     // Process each domain one at a time
     for (let i = 0; i < domains.length; i++) {
@@ -268,6 +303,9 @@ export default function Domains() {
         // Update this specific domain in state with the new data
         if (response.ok && data.results && data.results.length > 0) {
           const result = data.results[0]
+          if (result.status) {
+            statusCounts[result.status] = (statusCounts[result.status] || 0) + 1
+          }
           setDomains(prevDomains => 
             prevDomains.map(d => 
               d.id === domain.id 
@@ -285,6 +323,8 @@ export default function Domains() {
                 : d
             )
           )
+        } else {
+          statusCounts["error"] = (statusCounts["error"] || 0) + 1
         }
         
       } catch (error) {
@@ -305,9 +345,24 @@ export default function Domains() {
     
     // Show success message
     if (updatedCount > 0) {
-      setDnsError(`✓ Status updated for ${updatedCount} domain(s)`)
+      const updatedMessage =
+        updatedCount === 1
+          ? "✓ Status updated for 1 domain"
+          : `✓ Status updated for ${updatedCount} domains`
+      setDnsError(updatedMessage)
     } else {
-      setDnsError(`✓ All domains checked. No status changes detected.`)
+      const totalChecked = domains.length
+      const pendingCount = statusCounts["pending"] || 0
+
+      if (pendingCount === totalChecked && totalChecked > 0) {
+        const pendingMessage =
+          totalChecked === 1
+            ? "Checked 1 domain. Cloudflare still reports it as pending nameserver verification. Update the registrar nameservers or wait for propagation."
+            : `Checked ${totalChecked} domains. Cloudflare still reports them as pending nameserver verification. Update the registrar nameservers or wait for propagation.`
+        setDnsError(pendingMessage)
+      } else {
+        setDnsError("")
+      }
     }
     
     // Clear message after 5 seconds
@@ -326,22 +381,70 @@ export default function Domains() {
     setSkipRedirectConfirmed(false)
 
     // Parse domains from textarea (split by newlines, commas, or spaces)
-    const domains = domainList
+    const domainsToAttempt = domainList
       .split(/[\n,\s]+/)
       .map(d => d.trim())
       .filter(d => d.length > 0)
 
-    if (domains.length === 0) {
+    if (domainsToAttempt.length === 0) {
       setAddDomainError("Please enter at least one domain")
       return
     }
 
+    const existingDomainNames = new Set(
+      domains.map((d) => d.domain_name.toLowerCase())
+    )
+    const seenInputDomains = new Set<string>()
+    const duplicateInInput: string[] = []
+    const duplicateExisting: string[] = []
+    const uniqueDomainsToAttempt: string[] = []
+
+    domainsToAttempt.forEach((rawDomain) => {
+      const normalized = rawDomain.toLowerCase()
+      if (seenInputDomains.has(normalized)) {
+        duplicateInInput.push(rawDomain)
+        return
+      }
+      if (existingDomainNames.has(normalized)) {
+        duplicateExisting.push(rawDomain)
+        return
+      }
+      seenInputDomains.add(normalized)
+      uniqueDomainsToAttempt.push(rawDomain)
+    })
+
+    if (duplicateInInput.length > 0) {
+      setAddDomainError(
+        `Remove duplicate domain(s) before proceeding: ${duplicateInInput.join(", ")}`
+      )
+      return
+    }
+
+    if (duplicateExisting.length > 0) {
+      setAddDomainError(
+        `These domains already exist on this server: ${duplicateExisting.join(", ")}. Remove duplicates before proceeding.`
+      )
+      return
+    }
+
+    const currentDomainCount = domains.length
+    const slotsRemaining = Math.max(0, MAX_DOMAINS_PER_SERVER - currentDomainCount)
+
+    if (slotsRemaining === 0) {
+      setAddDomainError("purchase another server to add more domains")
+      return
+    }
+
+    const domainsToProcess = uniqueDomainsToAttempt.slice(0, slotsRemaining)
+    const overflowDomains = uniqueDomainsToAttempt.slice(slotsRemaining)
+    const reachedLimitThisRun = overflowDomains.length > 0
+
     setAddingDomains(true)
-    setAddDomainError("")
+    setAddDomainError(reachedLimitThisRun ? "purchase another server to add more domains" : "")
     setAddedDomains([])
 
     // Process each domain
-    for (const domain of domains) {
+    for (const domain of domainsToProcess) {
       setCurrentlyAdding(domain)
       
       try {
@@ -388,7 +491,19 @@ export default function Domains() {
     setCurrentlyAdding("")
     setAddingDomains(false)
     setDomainList("")
-    
+
+    if (overflowDomains.length > 0) {
+      setAddedDomains(prev => [
+        ...prev,
+        ...overflowDomains.map(domain => ({
+          domain,
+          nameservers: [],
+          status: "error",
+          message: "purchase another server to add more domains",
+        })),
+      ])
+    }
+
     // Refresh the domains list
     fetchDomains()
   }
@@ -431,7 +546,9 @@ export default function Domains() {
       const data = await response.json()
 
       if (response.ok) {
-        // For now we just store in DB; DNS waterfall will use it later
+        // Refresh domains so the dropdown immediately reflects the new redirect
+        await fetchDomains()
+
         setMasterDomainError("")
         setMasterDomainResults(
           successfulAddedDomainNames.map(domain => ({
@@ -607,8 +724,11 @@ export default function Domains() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gray-50 flex">
+      <div className="w-64 bg-white border-r border-gray-200 min-h-screen" />
+
+      <div className="flex-1">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
@@ -913,17 +1033,15 @@ export default function Domains() {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                    domain.cloudflareStatus === 'active' 
-                                      ? 'bg-green-100 text-green-800' 
-                                      : domain.cloudflareStatus === 'pending'
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : domain.cloudflareStatus === 'moved'
-                                      ? 'bg-orange-100 text-orange-800'
-                                      : 'bg-red-100 text-red-800'
-                                  }`}>
-                                    {domain.cloudflareStatus ? domain.cloudflareStatus.charAt(0).toUpperCase() + domain.cloudflareStatus.slice(1) : 'Pending'}
-                                  </span>
+                                  {domain.dnsConfigured && domain.cloudflareStatus === 'active' ? (
+                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                      Active
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                      Pending
+                                    </span>
+                                  )}
                                 </TableCell>
                               </TableRow>
                               {isExpanded && (
@@ -940,6 +1058,19 @@ export default function Domains() {
                                                 {ns}
                                               </div>
                                             ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Domain Redirect */}
+                                      {domain.masterDomain && (
+                                        <div>
+                                          <p className="text-sm font-semibold text-gray-700 mb-2">Domain Redirect:</p>
+                                          <div className="space-y-2">
+                                            <div>
+                                              <span className="text-xs font-medium text-gray-500">Redirects to:</span>
+                                              <div className="text-sm text-gray-600 font-mono">{domain.masterDomain}</div>
+                                            </div>
                                           </div>
                                         </div>
                                       )}
@@ -976,19 +1107,6 @@ export default function Domains() {
                                           </div>
                                         </div>
                                       )}
-                                      
-                                      {/* Domain Redirect */}
-                                      {domain.masterDomain && (
-                                        <div>
-                                          <p className="text-sm font-semibold text-gray-700 mb-2">Domain Redirect:</p>
-                                          <div className="space-y-2">
-                                            <div>
-                                              <span className="text-xs font-medium text-gray-500">Redirects to:</span>
-                                              <div className="text-sm text-gray-600 font-mono">{domain.masterDomain}</div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
                                     </div>
                                   </TableCell>
                                 </TableRow>
@@ -999,11 +1117,23 @@ export default function Domains() {
                       )}
                     </TableBody>
                   </Table>
+                  <div className="flex justify-end px-4 py-2 border-t">
+                    <span
+                      className={
+                        domains.length >= MAX_DOMAINS_PER_SERVER
+                          ? "text-sm text-red-600 font-semibold"
+                          : "text-sm text-gray-900 font-semibold"
+                      }
+                    >
+                      {domains.length} / {MAX_DOMAINS_PER_SERVER}
+                    </span>
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
         )}
+        </div>
       </div>
 
       {/* Top Left Navigation Buttons */}
@@ -1020,16 +1150,21 @@ export default function Domains() {
         >
           Domains
         </Button>
+        <Button
+          onClick={() => router.push("/inboxes")}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
+        >
+          Inboxes
+        </Button>
       </div>
 
       {/* Bottom Left Buttons */}
       <div className="fixed bottom-8 left-8 flex flex-col gap-4">
         <Button
-          onClick={handleOpenBilling}
-          disabled={openingBilling}
+          onClick={() => router.push("/billing")}
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
         >
-          {openingBilling ? "Opening..." : "Billing"}
+          Billing
         </Button>
         <Button
           onClick={() => router.push("/user-management")}
@@ -1258,7 +1393,9 @@ export default function Domains() {
                   </Button>
                 </div>
                 <div className="max-h-[400px] overflow-y-auto space-y-2">
-                  {domains.map((domain) => (
+                  {domains.map((domain) => {
+                    const inboxCount = domain.inboxCount ?? 0
+                    return (
                     <div
                       key={domain.id}
                       className="flex items-center space-x-3 p-3 rounded-md border hover:bg-gray-50"
@@ -1278,12 +1415,19 @@ export default function Domains() {
                       />
                       <label
                         htmlFor={`delete-${domain.id}`}
-                        className="flex-1 cursor-pointer text-sm font-medium text-gray-900"
+                        className="flex-1 cursor-pointer"
                       >
-                        {domain.domain_name}
+                        <p className="text-sm font-medium text-gray-900">{domain.domain_name}</p>
+                        <p
+                          className={`text-xs ${
+                            inboxCount > 0 ? "text-red-600 font-medium" : "text-gray-500"
+                          }`}
+                        >
+                          {inboxCount} active inbox{inboxCount === 1 ? "" : "es"}
+                        </p>
                       </label>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </>
             )}

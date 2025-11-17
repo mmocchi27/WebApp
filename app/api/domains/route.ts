@@ -4,13 +4,6 @@ import { prisma } from "@/lib/prisma"
 import axios from "axios"
 import https from "https"
 
-// Create axios instance that allows self-signed certificates
-const axiosInstance = axios.create({
-  httpsAgent: new https.Agent({
-    rejectUnauthorized: false // Allow self-signed certificates
-  })
-})
-
 export async function GET(request: NextRequest) {
   try {
     const { userId, orgId } = await auth()
@@ -18,16 +11,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get serverId from query params (this is actually the subscription ID)
-    const serverId = request.nextUrl.searchParams.get("serverId")
-    if (!serverId) {
+    // Query param may contain the real server UUID (preferred) or legacy Stripe subscription ID
+    const serverIdentifier = request.nextUrl.searchParams.get("serverId")
+    if (!serverIdentifier) {
       return NextResponse.json({ error: "Server ID is required" }, { status: 400 })
     }
 
-    // Get server details from database by subscription ID
-    const server = await prisma.server.findFirst({
-      where: { subscriptionId: serverId }
+    // Prefer the actual server UUID but fall back to legacy subscriptionId for older clients
+    let server = await prisma.server.findUnique({
+      where: { id: serverIdentifier }
     })
+
+    if (!server) {
+      server = await prisma.server.findFirst({
+        where: { subscriptionId: serverIdentifier }
+      })
+    }
 
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
@@ -43,7 +42,23 @@ export async function GET(request: NextRequest) {
     
     const dbDomains = await prisma.domain.findMany({
       where: { serverId: server.id },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const inboxCounts = await prisma.inbox.groupBy({
+      by: ["domainName"],
+      where: {
+        serverId: server.id,
+        status: { not: "failed" },
+      },
+      _count: { domainName: true },
+    })
+
+    const inboxCountMap = new Map<string, number>()
+    inboxCounts.forEach((entry) => {
+      if (entry.domainName) {
+        inboxCountMap.set(entry.domainName.toLowerCase(), entry._count.domainName)
+      }
     })
 
     // Transform to match the expected frontend format
@@ -61,7 +76,8 @@ export async function GET(request: NextRequest) {
       spfRecord: domain.spfRecord,
       dmarcRecord: domain.dmarcRecord,
       dkimRecord: domain.dkimRecord,
-      lastCheckedAt: domain.lastCheckedAt
+      lastCheckedAt: domain.lastCheckedAt,
+      inboxCount: inboxCountMap.get(domain.domainName.toLowerCase()) ?? 0,
     }))
 
     console.log(`Successfully fetched ${domains.length} domains from database`)

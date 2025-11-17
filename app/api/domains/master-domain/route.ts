@@ -28,10 +28,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find server by subscription ID (serverId from UI is the Stripe subscriptionId)
-    const server = await prisma.server.findFirst({
-      where: { subscriptionId: serverId },
+    // Find server by actual UUID (preferred) or legacy subscription ID
+    let server = await prisma.server.findUnique({
+      where: { id: serverId },
     })
+
+    if (!server) {
+      server = await prisma.server.findFirst({
+        where: { subscriptionId: serverId },
+      })
+    }
 
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })

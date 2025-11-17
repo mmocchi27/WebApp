@@ -32,10 +32,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Server ID is required" }, { status: 400 })
     }
 
-    // Verify user has access to this server
-    const server = await prisma.server.findFirst({
-      where: { subscriptionId: serverId }
+    // Verify user has access to this server (prefer UUID, fallback to subscription ID)
+    let server = await prisma.server.findUnique({
+      where: { id: serverId }
     })
+
+    if (!server) {
+      server = await prisma.server.findFirst({
+        where: { subscriptionId: serverId }
+      })
+    }
 
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })

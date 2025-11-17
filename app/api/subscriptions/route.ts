@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth, clerkClient } from "@clerk/nextjs/server"
 import Stripe from "stripe"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-07-30.basil",
-})
-
+const stripeSecret = process.env.STRIPE_SECRET_KEY
+const stripe =
+  stripeSecret &&
+  new Stripe(stripeSecret, {
+    apiVersion: "2025-07-30.basil",
+  })
 export async function GET(request: NextRequest) {
   try {
     const { userId, orgId } = await auth()
@@ -17,7 +19,7 @@ export async function GET(request: NextRequest) {
     let organizationId = orgId
     
     if (!organizationId) {
-      const client = await clerkClient()
+      const client = clerkClient
       const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
       if (orgMemberships.data && orgMemberships.data.length > 0) {
         organizationId = orgMemberships.data[0].organization.id
@@ -39,62 +41,51 @@ export async function GET(request: NextRequest) {
         organizationId: organizationId,
       },
       select: {
+        id: true,
         subscriptionId: true,
         serverName: true,
         ipAddress: true,
+        status: true,
       },
     })
 
-    const orgSubscriptionIds = new Set(orgServers.map(s => s.subscriptionId))
-
-    // If no subscriptions for this org, return empty
-    if (orgSubscriptionIds.size === 0) {
-      return NextResponse.json({
-        subscriptions: [],
-      })
-    }
-
-    // Build map of subscriptionId -> server data for easy lookup
-    const serverMap = new Map(orgServers.map(server => [server.subscriptionId, server]))
-
-    // Get ALL subscriptions from Stripe that match our org's subscription IDs
-    const allSubscriptions: Stripe.Subscription[] = []
-    for (const subId of orgSubscriptionIds) {
-      try {
-        const subscription = await stripe.subscriptions.retrieve(subId, {
-          expand: ['default_payment_method', 'latest_invoice'],
-        })
-        allSubscriptions.push(subscription)
-      } catch (error) {
-        console.error(`Failed to retrieve subscription ${subId}:`, error)
+    for (const server of orgServers) {
+      if (!server.serverName && server.subscriptionId && stripe) {
+        try {
+          const stripeSub = await stripe.subscriptions.retrieve(server.subscriptionId)
+          const stripeName =
+            stripeSub.metadata?.serverName?.trim() ||
+            stripeSub.description?.trim() ||
+            null
+          if (stripeName) {
+            await prisma.server.update({
+              where: { id: server.id },
+              data: {
+                serverName: stripeName,
+                updatedAt: new Date(),
+              },
+            })
+            server.serverName = stripeName
+          }
+        } catch (err) {
+          console.error(
+            `Failed to sync server name from Stripe for subscription ${server.subscriptionId}:`,
+            err
+          )
+        }
       }
     }
 
-    // Filter subscriptions to only show active ones
-    const activeSubscriptions = allSubscriptions.filter(sub => 
-      sub.status === 'active' || sub.status === 'past_due'
-    )
-
-    const formattedSubscriptions = activeSubscriptions.map((sub) => {
-      // Generate order number from subscription ID
-      const orderNumber = sub.id.substring(4, 12).toUpperCase()
-
-      // Calculate the next billing date based on created date and billing cycle
-      const createdDate = (sub as any).created ? new Date((sub as any).created * 1000) : null
-      const nextBillingDate = createdDate ? new Date(createdDate.getTime() + (30 * 24 * 60 * 60 * 1000)) : null
-
-      const serverData = serverMap.get(sub.id)
-
-      return {
-        id: sub.id,
-        status: sub.status,
-        current_period_end: (sub as any).current_period_end || (nextBillingDate ? Math.floor(nextBillingDate.getTime() / 1000) : 0),
-        orderNumber,
-        serverName: serverData?.serverName || sub.metadata.serverName || null,
-        domainList: sub.metadata.domainList || null,
-        ipAddress: serverData?.ipAddress || sub.metadata.ipAddress || null,
-      }
-    })
+    const formattedSubscriptions = orgServers.map(server => ({
+      id: server.id,
+      status: server.status || "active",
+      current_period_end: null,
+      orderNumber: server.id.substring(0, 8).toUpperCase(),
+      serverName: server.serverName || null,
+      domainList: null,
+      ipAddress: server.ipAddress || null,
+      subscriptionId: server.subscriptionId,
+    }))
 
     return NextResponse.json({
       subscriptions: formattedSubscriptions,

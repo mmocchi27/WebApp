@@ -6,6 +6,7 @@ import https from "https"
 
 const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4'
 const CLOUDFLARE_TOKEN = process.env.CLOUDFLARE_API_TOKEN
+const MAX_DOMAINS_PER_SERVER = 34
 
 // Create axios instance for MailCow that allows self-signed certificates
 const axiosInstance = axios.create({
@@ -46,10 +47,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Server ID is required" }, { status: 400 })
     }
 
-    // Get server details from database
-    const server = await prisma.server.findFirst({
-      where: { subscriptionId: serverId }
+    // Get server details from database by UUID (preferred) or legacy subscription ID
+    let server = await prisma.server.findUnique({
+      where: { id: serverId }
     })
+
+    if (!server) {
+      server = await prisma.server.findFirst({
+        where: { subscriptionId: serverId }
+      })
+    }
 
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
@@ -69,6 +76,55 @@ export async function POST(request: NextRequest) {
     }
 
     const cleanDomain = sanitizeString(domain)
+
+    // Inherit the most recently configured master domain for this server (if any)
+    const existingMasterDomain = await prisma.domain.findFirst({
+      where: {
+        serverId: server.id,
+        masterDomain: { not: null },
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      select: {
+        masterDomain: true,
+      },
+    })
+
+    const inheritedMasterDomain = existingMasterDomain?.masterDomain
+      ? sanitizeString(existingMasterDomain.masterDomain)
+      : null
+
+    const existingDomain = await prisma.domain.findFirst({
+      where: {
+        serverId: server.id,
+        domainName: cleanDomain,
+      },
+    })
+
+    if (existingDomain) {
+      return NextResponse.json(
+        {
+          error: "Duplicate domain",
+          message: "This domain already exists on this server. Remove duplicates before proceeding.",
+        },
+        { status: 400 }
+      )
+    }
+
+    const domainCount = await prisma.domain.count({
+      where: { serverId: server.id },
+    })
+
+    if (domainCount >= MAX_DOMAINS_PER_SERVER) {
+      return NextResponse.json(
+        {
+          error: "Domain limit reached",
+          message: `Each server can have a maximum of ${MAX_DOMAINS_PER_SERVER} domains.`,
+        },
+        { status: 400 }
+      )
+    }
 
     console.log(`Adding domain ${cleanDomain} to Cloudflare and MailCow...`)
 
@@ -209,7 +265,7 @@ export async function POST(request: NextRequest) {
           cloudflareStatus: safeStatus,
           nameservers: safeNameservers.length > 0 ? safeNameservers : null,
           dnsConfigured: false,
-          masterDomain: null,
+          masterDomain: inheritedMasterDomain,
           redirectConfigured: false,
           mxRecord: null,
           spfRecord: null,
@@ -272,7 +328,7 @@ export async function POST(request: NextRequest) {
         cloudflareStatus: safeStatus,
         nameservers: safeNameservers.length > 0 ? safeNameservers : null,
         dnsConfigured: false,
-        masterDomain: null,
+        masterDomain: inheritedMasterDomain,
         redirectConfigured: false,
         mxRecord: null,
         spfRecord: null,

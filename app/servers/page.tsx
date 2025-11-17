@@ -72,8 +72,9 @@ export default function Servers() {
         // Merge Stripe subscriptions with database server data
         const mergedSubscriptions = subsData.subscriptions
           .map((sub: Subscription) => {
-            const serverData = serverMap.get(sub.id)
-            
+            const lookupKey = sub.subscriptionId || sub.id
+            const serverData = serverMap.get(lookupKey)
+
             return {
               ...sub,
               // Use status from database if available, otherwise fall back to Stripe status
@@ -118,71 +119,77 @@ export default function Servers() {
     }
   }, [])
 
+  const hasOrgMemberships = !!(userMemberships?.data?.length)
+
   useEffect(() => {
-    if (user && orgLoaded && listLoaded) {
-      // Check if user is a member of ANY organizations
-      const hasOrgs = userMemberships && userMemberships.data && userMemberships.data.length > 0
-      
-      if (!hasOrgs) {
-        // User is not a member of any org - show creation modal ONLY after checking
-        // Add small delay to prevent flash
-        setTimeout(() => {
-          setShowOrgCreation(true)
-          setLoading(false)
-        }, 100)
-      } else if (!organization) {
-        // User has orgs but no active org - set the first one as active
-        const firstOrg = userMemberships.data[0].organization
-        setActive({ organization: firstOrg.id })
-          .then(() => {
-            // Force reload after setting active org
-            window.location.reload()
-          })
-      } else {
-        // Has active organization - fetch subscriptions normally
-        setShowOrgCreation(false)
-        fetchSubscriptions()
-      }
+    if (!user || !orgLoaded || !listLoaded) return
+
+    if (!hasOrgMemberships) {
+      setTimeout(() => {
+        setShowOrgCreation(true)
+        setLoading(false)
+      }, 100)
+      return
     }
-  }, [user, organization, orgLoaded, listLoaded, userMemberships, setActive, fetchSubscriptions])
 
-  const startEditingServer = (subscriptionId: string) => {
+    if (!organization) {
+      const firstOrg = userMemberships!.data[0].organization
+      setActive({ organization: firstOrg.id }).then(() => {
+        window.location.reload()
+      })
+      return
+    }
+
+    setShowOrgCreation(false)
+    fetchSubscriptions()
+  }, [user, organization, orgLoaded, listLoaded, hasOrgMemberships, setActive, fetchSubscriptions])
+
+  const startEditingServer = (serverId: string) => {
     setEditingServerIds(prev => {
-      if (prev.has(subscriptionId)) return prev
+      if (prev.has(serverId)) return prev
       const newSet = new Set(prev)
-      newSet.add(subscriptionId)
+      newSet.add(serverId)
       editingServerIdsRef.current = newSet
       return newSet
     })
   }
 
-  const stopEditingServer = (subscriptionId: string) => {
+  const stopEditingServer = (serverId: string) => {
     setEditingServerIds(prev => {
-      if (!prev.has(subscriptionId)) return prev
+      if (!prev.has(serverId)) return prev
       const newSet = new Set(prev)
-      newSet.delete(subscriptionId)
+      newSet.delete(serverId)
       editingServerIdsRef.current = newSet
       return newSet
     })
   }
 
-  const handleServerNameChange = (subscriptionId: string, value: string) => {
+  const handleServerNameChange = (serverId: string, value: string) => {
     setServerNames(prev => ({
       ...prev,
-      [subscriptionId]: value
+      [serverId]: value
     }))
   }
 
-  const handleServerNameSave = async (subscriptionId: string, exitEditing = false) => {
-    const serverName = serverNames[subscriptionId]
+  const handleServerNameSave = async (serverId: string, exitEditing = false) => {
+    const serverName = serverNames[serverId]
     if (!serverName) {
       if (exitEditing) {
-        stopEditingServer(subscriptionId)
+        stopEditingServer(serverId)
       }
       return
     }
 
-    setSavingNames(prev => new Set(prev).add(subscriptionId))
+    const targetServer = subscriptions.find((sub) => sub.id === serverId)
+    if (!targetServer || !targetServer.subscriptionId) {
+      console.error("Missing Stripe subscription ID for server", serverId)
+      if (exitEditing) {
+        stopEditingServer(serverId)
+      }
+      return
+    }
+
+    setSavingNames(prev => new Set(prev).add(serverId))
     
     try {
       const response = await fetch('/api/update-subscription-metadata', {
@@ -191,18 +198,20 @@ export default function Servers() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          subscriptionId,
+          subscriptionId: targetServer.subscriptionId,
           metadata: { serverName }
         }),
       })
 
       if (response.ok) {
         // Update the subscription in our state
-        setSubscriptions(prev => prev.map(sub => 
-          sub.id === subscriptionId 
-            ? { ...sub, serverName }
-            : sub
-        ))
+        setSubscriptions(prev =>
+          prev.map(sub =>
+            sub.id === serverId
+              ? { ...sub, serverName }
+              : sub
+          )
+        )
       } else {
         console.error('Failed to save server name')
       }
@@ -211,11 +220,11 @@ export default function Servers() {
     } finally {
       setSavingNames(prev => {
         const newSet = new Set(prev)
-        newSet.delete(subscriptionId)
+        newSet.delete(serverId)
         return newSet
       })
       if (exitEditing) {
-        stopEditingServer(subscriptionId)
+        stopEditingServer(serverId)
       }
     }
   }
@@ -465,16 +474,21 @@ export default function Servers() {
         >
           Domains
         </Button>
+        <Button
+          onClick={() => router.push("/inboxes")}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
+        >
+          Inboxes
+        </Button>
       </div>
 
       {/* Bottom Left Buttons */}
       <div className="fixed bottom-8 left-8 flex flex-col gap-4">
         <Button
-          onClick={handleOpenBilling}
-          disabled={openingBilling}
+          onClick={() => router.push("/billing")}
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
         >
-          {openingBilling ? "Opening..." : "Billing"}
+          Billing
         </Button>
         <Button
           onClick={() => router.push("/user-management")}

@@ -128,6 +128,51 @@ async function deleteDomainFromCloudflare(domainName: string, zoneId: string) {
   console.log(`  ✅ Cloudflare cleanup completed for ${domainName}`)
 }
 
+async function deleteInboxesForDomain(domainName: string, serverId: string, ipAddress: string, apiKey: string) {
+  const inboxes = await prisma.inbox.findMany({
+    where: {
+      serverId,
+      domainName,
+    },
+    select: { id: true, email: true },
+  })
+
+  if (inboxes.length === 0) {
+    console.log(`  🔍 No inboxes found for ${domainName}, skipping mailbox cleanup`)
+    return
+  }
+
+  const emails = inboxes.map((inbox) => inbox.email)
+  console.log(`  📨 Deleting ${emails.length} inbox(es) for ${domainName} before domain removal`)
+
+  try {
+    await axiosInstance.post(
+      `https://${ipAddress}/api/v1/delete/mailbox`,
+      emails,
+      {
+        headers: {
+          "X-API-Key": apiKey,
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
+      }
+    )
+    console.log(`    ✅ Deleted inboxes from MailCow for ${domainName}`)
+  } catch (error: any) {
+    console.error(`    ❌ Failed to delete inboxes from MailCow for ${domainName}:`, error?.message)
+    throw new Error(`Failed to delete inboxes for ${domainName}. Please delete inboxes before removing the domain.`)
+  }
+
+  await prisma.inbox.deleteMany({
+    where: {
+      id: {
+        in: inboxes.map((inbox) => inbox.id),
+      },
+    },
+  })
+  console.log(`    ✅ Deleted inbox records from database for ${domainName}`)
+}
+
 async function deleteDomainFromMailCow(domainName: string, ipAddress: string, apiKey: string) {
   console.log(`🗑️  Deleting domain from MailCow: ${domainName}...`)
   
@@ -178,10 +223,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get server details from database
-    const server = await prisma.server.findFirst({
-      where: { subscriptionId: serverId }
+    // Get server details from database (prefer actual server ID, fall back to legacy subscriptionId)
+    let server = await prisma.server.findUnique({
+      where: { id: serverId }
     })
+
+    if (!server) {
+      server = await prisma.server.findFirst({
+        where: { subscriptionId: serverId }
+      })
+    }
 
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
@@ -225,17 +276,20 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // Step 1: Delete from Cloudflare (if zone ID exists)
+        // Step 1: Delete inboxes associated with this domain
+        await deleteInboxesForDomain(domainName, server.id, server.ipAddress, server.apiKey)
+
+        // Step 2: Delete from Cloudflare (if zone ID exists)
         if (domain.cloudflareZoneId) {
           await deleteDomainFromCloudflare(domainName, domain.cloudflareZoneId)
         } else {
           console.log(`  ⚠️ No Cloudflare zone ID for ${domainName}, skipping Cloudflare cleanup`)
         }
 
-        // Step 2: Delete from MailCow
+        // Step 3: Delete from MailCow
         await deleteDomainFromMailCow(domainName, server.ipAddress, server.apiKey)
 
-        // Step 3: Delete from database
+        // Step 4: Delete from database
         await prisma.domain.delete({
           where: { id: domain.id }
         })

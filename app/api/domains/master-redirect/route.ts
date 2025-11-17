@@ -173,9 +173,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const server = await prisma.server.findFirst({
-      where: { subscriptionId: serverId },
+    let server = await prisma.server.findUnique({
+      where: { id: serverId },
     })
+
+    if (!server) {
+      server = await prisma.server.findFirst({
+        where: { subscriptionId: serverId },
+      })
+    }
 
     if (!server) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
