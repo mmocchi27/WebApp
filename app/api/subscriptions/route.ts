@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth, clerkClient } from "@clerk/nextjs/server"
 import Stripe from "stripe"
+import { prisma } from "@/lib/prisma"
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY
 const stripe =
@@ -35,7 +36,6 @@ export async function GET(request: NextRequest) {
 
     // Get all subscription IDs for this organization from the database
     // This ensures we only show subscriptions that belong to THIS org
-    const { prisma } = await import("@/lib/prisma")
     const orgServers = await prisma.server.findMany({
       where: {
         organizationId: organizationId,
