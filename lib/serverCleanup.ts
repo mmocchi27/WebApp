@@ -123,17 +123,36 @@ export async function deleteDomainFromCloudflare(domainName: string, zoneId: str
     return
   }
 
-  console.log(`    🌀 Removing Cloudflare zone ${zoneId} for ${domainName}`)
+  console.log(`    🌀 Removing DNS records from Cloudflare zone ${zoneId} for ${domainName}`)
   try {
-    await axios.delete(`${CLOUDFLARE_API_BASE}/zones/${zoneId}`, {
+    // Fetch all DNS records for the zone
+    const recordsResponse = await axios.get(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records`, {
       headers: {
         Authorization: `Bearer ${CLOUDFLARE_TOKEN}`,
         "Content-Type": "application/json",
       },
     })
-    console.log(`    ✅ Cloudflare zone removed for ${domainName}`)
+
+    const records = recordsResponse.data.result || []
+    console.log(`    📋 Found ${records.length} DNS records to delete for ${domainName}`)
+
+    // Delete each DNS record
+    for (const record of records) {
+      try {
+        await axios.delete(`${CLOUDFLARE_API_BASE}/zones/${zoneId}/dns_records/${record.id}`, {
+          headers: {
+            Authorization: `Bearer ${CLOUDFLARE_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+        })
+      } catch (delError: any) {
+        console.error(`    ⚠️  Failed to delete DNS record ${record.name}:`, delError?.message)
+      }
+    }
+
+    console.log(`    ✅ DNS records removed for ${domainName} (zone kept in Cloudflare)`)
   } catch (error: any) {
-    console.error(`    ❌ Failed to delete Cloudflare zone for ${domainName}:`, error?.message)
+    console.error(`    ❌ Failed to delete DNS records for ${domainName}:`, error?.message)
   }
 }
 
