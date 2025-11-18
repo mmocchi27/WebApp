@@ -6,6 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useRouter } from "next/navigation"
 import { useState, useEffect, useRef, useCallback } from "react"
 
@@ -444,9 +450,24 @@ export default function Servers() {
                       )}
                     </div>
                     <div className="text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(subscription.status)}`}>
-                        {subscription.status}
-                      </span>
+                      {subscription.status.toLowerCase() === 'pending' ? (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(subscription.status)} cursor-help`}>
+                                {subscription.status}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="max-w-xs">Waiting for MailMountains team to assign an IP address. This should take place within the next hour.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(subscription.status)}`}>
+                          {subscription.status}
+                        </span>
+                      )}
                     </div>
                     <div className="text-gray-600 text-center">
                       {ipAddresses[subscription.id] || "Not assigned"}

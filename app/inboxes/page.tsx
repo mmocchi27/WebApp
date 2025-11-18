@@ -684,9 +684,16 @@ const handleOpenCreateInboxes = () => {
       return
     }
 
+    // Close both modals immediately
+    setShowCreateInboxReview(false)
+    setShowAddInboxModal(false)
+    
     setCreatingInboxes(true)
     setCreationError("")
     setCreationResults([])
+    
+    // Show creating notice
+    setPageNotice({ type: "success", text: `Creating ${totalRequested} inbox${totalRequested === 1 ? '' : 'es'}...` })
 
     try {
       const response = await fetch("/api/inboxes/create", {
@@ -708,16 +715,28 @@ const handleOpenCreateInboxes = () => {
         throw new Error(data.message || data.error || "Failed to create inboxes")
       }
 
-      setCreationResults(data.results || [])
+      const results = data.results || []
+      const successCount = results.filter((r: any) => r.status === "success").length
+      const errorCount = results.filter((r: any) => r.status === "error").length
+      
+      setCreationResults(results)
       await fetchInboxes()
-      setShowCreateInboxReview(false)
-      setShowAddInboxModal(false)
+      
+      // Show success/error notice
+      if (errorCount === 0) {
+        setPageNotice({ type: "success", text: `Successfully created ${successCount} inbox${successCount === 1 ? '' : 'es'}!` })
+      } else if (successCount === 0) {
+        setPageNotice({ type: "error", text: `Failed to create inboxes. ${errorCount} error${errorCount === 1 ? '' : 's'}.` })
+      } else {
+        setPageNotice({ type: "success", text: `Created ${successCount} inbox${successCount === 1 ? '' : 'es'}. ${errorCount} failed.` })
+      }
     } catch (error: any) {
       const rawMessage = error.message || "Failed to create inboxes"
       const normalizedMessage = rawMessage.includes("Duplicate inbox found")
         ? "Duplicate inbox found. Please adjust the inboxes you're looking to create"
         : rawMessage
       setCreationError(normalizedMessage)
+      setPageNotice({ type: "error", text: normalizedMessage })
     } finally {
       setCreatingInboxes(false)
     }
