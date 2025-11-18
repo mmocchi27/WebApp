@@ -774,13 +774,7 @@ const handleOpenCreateInboxes = () => {
     }
   }, [showCreateInboxReview, createBlankTemplates])
 
-  useEffect(() => {
-    if (!pageNotice) return
-    // Longer timeout for error messages that may contain multiple failed inboxes
-    const timeout = pageNotice.type === "error" ? 10000 : 5000
-    const timer = setTimeout(() => setPageNotice(null), timeout)
-    return () => clearTimeout(timer)
-  }, [pageNotice])
+  // Removed auto-dismiss - users must manually close notices to have time to note failed inboxes
 
   if (loadingSubscriptions) {
     return (
@@ -829,13 +823,47 @@ const handleOpenCreateInboxes = () => {
 
         {pageNotice && (
           <div
-            className={`mb-6 rounded-md border px-4 py-3 text-sm ${
+            className={`mb-6 rounded-md border p-4 ${
               pageNotice.type === "success"
-                ? "border-green-200 bg-green-50 text-green-800"
-                : "border-red-200 bg-red-50 text-red-800"
+                ? "border-green-200 bg-green-50"
+                : "border-red-200 bg-red-50"
             }`}
           >
-            {pageNotice.text}
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-3 flex-1">
+                <svg 
+                  className={`h-5 w-5 mt-0.5 flex-shrink-0 ${
+                    pageNotice.type === "success" ? "text-green-600" : "text-red-600"
+                  }`}
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  {pageNotice.type === "success" ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  )}
+                </svg>
+                <p className={`text-sm ${
+                  pageNotice.type === "success" ? "text-green-800" : "text-red-800"
+                }`}>
+                  {pageNotice.text}
+                </p>
+              </div>
+              <button
+                onClick={() => setPageNotice(null)}
+                className={`ml-4 flex-shrink-0 ${
+                  pageNotice.type === "success" 
+                    ? "text-green-600 hover:text-green-800" 
+                    : "text-red-600 hover:text-red-800"
+                }`}
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         )}
 
