@@ -731,12 +731,9 @@ const handleOpenCreateInboxes = () => {
         setPageNotice({ type: "success", text: `Created ${successCount} inbox${successCount === 1 ? '' : 'es'}. ${errorCount} failed.` })
       }
     } catch (error: any) {
-      const rawMessage = error.message || "Failed to create inboxes"
-      const normalizedMessage = rawMessage.includes("Duplicate inbox found")
-        ? "Duplicate inbox found. Please adjust the inboxes you're looking to create"
-        : rawMessage
-      setCreationError(normalizedMessage)
-      setPageNotice({ type: "error", text: normalizedMessage })
+      const errorMessage = error.message || "Failed to create inboxes"
+      setCreationError(errorMessage)
+      setPageNotice({ type: "error", text: errorMessage })
     } finally {
       setCreatingInboxes(false)
     }

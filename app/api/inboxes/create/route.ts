@@ -134,16 +134,6 @@ export async function POST(request: NextRequest) {
       const passwordHash = await hashPassword(password)
       const email = `${inbox.username}@${inbox.domainName}`
 
-      const existingInbox = await prisma.inbox.findUnique({ where: { email } })
-      if (existingInbox) {
-        return NextResponse.json(
-          {
-            error: "Duplicate inbox found. Please adjust the inboxes you're looking to create",
-          },
-          { status: 400 }
-        )
-      }
-
       let encryptedPassword: string
       try {
         encryptedPassword = encryptSecret(password)
@@ -155,21 +145,36 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const createdInbox = await prisma.inbox.create({
-        data: {
-          serverId: server.id,
-          domainName: inbox.domainName,
-          localPart: inbox.username,
-          email,
-          firstName: inbox.firstName,
-          lastName: inbox.lastName,
-          fullName: `${inbox.firstName} ${inbox.lastName}`.trim(),
-          passwordHash,
-          encryptedPassword,
-          status: "pending",
-          createdBy: userId,
-        },
-      })
+      let createdInbox
+      try {
+        createdInbox = await prisma.inbox.create({
+          data: {
+            serverId: server.id,
+            domainName: inbox.domainName,
+            localPart: inbox.username,
+            email,
+            firstName: inbox.firstName,
+            lastName: inbox.lastName,
+            fullName: `${inbox.firstName} ${inbox.lastName}`.trim(),
+            passwordHash,
+            encryptedPassword,
+            status: "pending",
+            createdBy: userId,
+          },
+        })
+      } catch (dbError: any) {
+        // Handle unique constraint violation (duplicate email)
+        if (dbError.code === 'P2002') {
+          results.push({
+            domain: inbox.domainName,
+            email,
+            status: "error",
+            message: `Inbox ${email} already exists`,
+          })
+          continue
+        }
+        throw dbError
+      }
 
       try {
         const payload = {
