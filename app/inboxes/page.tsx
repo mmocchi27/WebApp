@@ -718,17 +718,26 @@ const handleOpenCreateInboxes = () => {
       const results = data.results || []
       const successCount = results.filter((r: any) => r.status === "success").length
       const errorCount = results.filter((r: any) => r.status === "error").length
+      const failedInboxes = results.filter((r: any) => r.status === "error")
       
       setCreationResults(results)
       await fetchInboxes()
       
-      // Show success/error notice
+      // Show success/error notice with failed inbox details
       if (errorCount === 0) {
         setPageNotice({ type: "success", text: `Successfully created ${successCount} inbox${successCount === 1 ? '' : 'es'}!` })
       } else if (successCount === 0) {
-        setPageNotice({ type: "error", text: `Failed to create inboxes. ${errorCount} error${errorCount === 1 ? '' : 's'}.` })
+        const failedList = failedInboxes.map((r: any) => r.email).join(", ")
+        setPageNotice({ 
+          type: "error", 
+          text: `Failed to create ${errorCount} inbox${errorCount === 1 ? '' : 'es'}: ${failedList}. Please attempt to recreate ${errorCount === 1 ? 'this inbox' : 'these inboxes'}.` 
+        })
       } else {
-        setPageNotice({ type: "success", text: `Created ${successCount} inbox${successCount === 1 ? '' : 'es'}. ${errorCount} failed.` })
+        const failedList = failedInboxes.map((r: any) => r.email).join(", ")
+        setPageNotice({ 
+          type: "success", 
+          text: `Created ${successCount} inbox${successCount === 1 ? '' : 'es'}. Failed to create ${errorCount}: ${failedList}. Please attempt to recreate the failed inbox${errorCount === 1 ? '' : 'es'}.` 
+        })
       }
     } catch (error: any) {
       const errorMessage = error.message || "Failed to create inboxes"
@@ -767,7 +776,9 @@ const handleOpenCreateInboxes = () => {
 
   useEffect(() => {
     if (!pageNotice) return
-    const timer = setTimeout(() => setPageNotice(null), 4000)
+    // Longer timeout for error messages that may contain multiple failed inboxes
+    const timeout = pageNotice.type === "error" ? 10000 : 5000
+    const timer = setTimeout(() => setPageNotice(null), timeout)
     return () => clearTimeout(timer)
   }, [pageNotice])
 
