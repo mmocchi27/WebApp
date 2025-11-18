@@ -144,10 +144,10 @@ export default function Domains() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedServerId])
 
-  // Show pending notice when there are pending domains
+  // Show pending notice when there are domains that need status check or are pending
   useEffect(() => {
     const hasPendingDomains = domains.some(d => 
-      d.cloudflareStatus === 'pending' || (!d.dnsConfigured && d.cloudflareStatus !== 'active')
+      !d.lastCheckedAt || (d.cloudflareStatus === 'pending' && d.cloudflareStatus !== 'active')
     )
     if (hasPendingDomains) {
       setShowPendingNotice(true)
@@ -617,6 +617,21 @@ export default function Domains() {
     setConfiguringMasterDomain(false)
   }
 
+  const handleEditDomainsClick = (action: 'add' | 'delete') => {
+    const selectedServer = subscriptions.find(sub => sub.id === selectedServerId)
+    if (selectedServer && selectedServer.status.toLowerCase() === 'pending') {
+      setDnsError("Server needs to be marked as 'active' before you can manage domains")
+      setTimeout(() => setDnsError(""), 5000)
+      return
+    }
+
+    if (action === 'add') {
+      setShowAddDomainModal(true)
+    } else {
+      setShowDeleteDomainModal(true)
+    }
+  }
+
   const handleDeleteDomains = async () => {
     if (selectedDomainsToDelete.size === 0) {
       return
@@ -792,16 +807,16 @@ export default function Domains() {
           <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-4">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-3">
-                <svg className="h-5 w-5 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-sm text-blue-800">
-                  Domains being marked as pending initially is normal. Please allow 30 minutes to an hour for nameservers to populate. You can check the status by clicking "Check Nameserver Status"
+                  Domains being marked as pending right after creation is normal. Please allow 30 minutes for nameservers to populate after you've adjusted within your registrar. If the domain is marked "Inactive" after checking the status, this just means the nameserver has not taken hold of the new domain. Recheck every 30 minutes by clicking "Check Status".
                 </p>
               </div>
               <button
                 onClick={() => setShowPendingNotice(false)}
-                className="text-blue-600 hover:text-blue-800 ml-4"
+                className="text-blue-600 hover:text-blue-800 ml-4 flex-shrink-0"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -882,10 +897,10 @@ export default function Domains() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      <DropdownMenuItem onClick={() => setShowAddDomainModal(true)}>
+                      <DropdownMenuItem onClick={() => handleEditDomainsClick('add')}>
                         Add domains
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setShowDeleteDomainModal(true)}>
+                      <DropdownMenuItem onClick={() => handleEditDomainsClick('delete')}>
                         Delete domains
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -902,7 +917,7 @@ export default function Domains() {
                         Checking...
                       </>
                     ) : (
-                      'Check Nameserver Status'
+                      'Check Status'
                     )}
                   </Button>
                   <Button
@@ -1084,16 +1099,16 @@ export default function Domains() {
                                     <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                                       Active
                                     </span>
-                                  ) : domain.cloudflareStatus === 'inactive' ? (
+                                  ) : !domain.lastCheckedAt ? (
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 cursor-help">
-                                            Inactive
+                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 cursor-help">
+                                            Check Status
                                           </span>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                          <p className="max-w-xs">Please give your new nameserver record 1-2 hours to populate, and try again.</p>
+                                          <p className="max-w-xs">Adjust all nameservers within registrar and click "Check Status"</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
@@ -1106,7 +1121,7 @@ export default function Domains() {
                                           </span>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                          <p className="max-w-xs">Please click on check nameservers to begin DNS adjustments</p>
+                                          <p className="max-w-xs">Please allow nameservers to populate. This could take a few hours. Check back every 30 minutes.</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>

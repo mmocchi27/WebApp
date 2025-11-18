@@ -433,9 +433,15 @@ export async function POST(request: NextRequest) {
         )
 
         if (response.data.success && response.data.result) {
-          const newStatus = response.data.result.status || 'pending'
+          let newStatus = response.data.result.status || 'pending'
           const nameservers = response.data.result.name_servers || []
           const oldStatus = domain.cloudflareStatus
+
+          // If Cloudflare returns 'pending' and this domain has been checked before (lastCheckedAt exists),
+          // mark it as 'inactive' to indicate nameservers haven't been configured
+          if (newStatus === 'pending' && domain.lastCheckedAt) {
+            newStatus = 'inactive'
+          }
 
           // Update domain status and nameservers in database
           await prisma.domain.update({
