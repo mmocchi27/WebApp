@@ -552,18 +552,24 @@ export default function Domains() {
       const data = await response.json()
 
       if (response.ok) {
-        // Refresh domains so the dropdown immediately reflects the new redirect
+        // Close the modal
+        setShowAddDomainModal(false)
+        
+        // Refresh domains so the table immediately reflects the new redirect
         await fetchDomains()
-
+        
+        // Show success message
+        setDnsError(`✓ Master domain redirect configured for ${successfulAddedDomainNames.length} domain(s)`)
+        setTimeout(() => setDnsError(""), 5000)
+        
+        // Reset modal state
+        setDomainList("")
+        setAddedDomains([])
+        setAddDomainError("")
+        setCurrentlyAdding("")
+        setMasterDomain("")
+        setMasterDomainResults([])
         setMasterDomainError("")
-        setMasterDomainResults(
-          successfulAddedDomainNames.map(domain => ({
-            domain,
-            status: "configured",
-            success: true,
-            message: `Master domain saved as ${trimmedMasterDomain}`,
-          }))
-        )
       } else {
         setMasterDomainError(data.message || data.error || "Failed to configure master domain redirects")
       }
@@ -1043,6 +1049,19 @@ export default function Domains() {
                                     <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                                       Active
                                     </span>
+                                  ) : domain.cloudflareStatus === 'inactive' ? (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 cursor-help">
+                                            Inactive
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p className="max-w-xs">Please give your new nameserver record 1-2 hours to populate, and try again.</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   ) : (
                                     <TooltipProvider>
                                       <Tooltip>
@@ -1052,7 +1071,7 @@ export default function Domains() {
                                           </span>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                          <p className="max-w-xs">Please add your new nameservers to your domain registrar, and click "Check Nameserver Status" once this has been completed</p>
+                                          <p className="max-w-xs">Please click on check nameservers to begin DNS adjustments</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
