@@ -1,70 +1,91 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import Stripe from "stripe"
+import { prisma } from "@/lib/prisma"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-07-30.basil",
-})
-
+const stripeSecret = process.env.STRIPE_SECRET_KEY
+const stripe =
+  stripeSecret &&
+  new Stripe(stripeSecret, {
+    apiVersion: "2025-07-30.basil",
+  })
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth()
+    const { userId, orgId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // First, find the Stripe customer for this Clerk user
-    let customerId: string | null = null
+    // Get user's organization (either from auth or fetch first org)
+    let organizationId = orgId
     
-    // Search for existing customers with this Clerk user ID in metadata
-    const existingCustomers = await stripe.customers.list({
-      limit: 100,
-    })
-    
-    const customer = existingCustomers.data.find(c => 
-      c.metadata.clerkUserId === userId
-    )
-    
-    if (customer) {
-      customerId = customer.id
+    if (!organizationId) {
+      const client = clerkClient
+      const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
+      if (orgMemberships.data && orgMemberships.data.length > 0) {
+        organizationId = orgMemberships.data[0].organization.id
+      }
     }
 
-    // If no customer exists, return empty subscriptions
-    if (!customerId) {
+    // User must have an organization to view subscriptions
+    if (!organizationId) {
       return NextResponse.json({
         subscriptions: [],
       })
     }
 
-    // Get subscriptions for this specific customer
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customerId,
-      limit: 100,
-      expand: ['data.default_payment_method', 'data.latest_invoice'],
+    // Get all subscription IDs for this organization from the database
+    // This ensures we only show subscriptions that belong to THIS org
+    const orgServers = await prisma.server.findMany({
+      where: {
+        organizationId: organizationId,
+      },
+      select: {
+        id: true,
+        subscriptionId: true,
+        serverName: true,
+        ipAddress: true,
+        status: true,
+      },
     })
 
-    // Filter subscriptions to only show active ones
-    const activeSubscriptions = subscriptions.data.filter(sub => 
-      sub.status === 'active' || sub.status === 'past_due'
-    )
-
-    const formattedSubscriptions = activeSubscriptions.map((sub) => {
-      // Generate order number from subscription ID
-      const orderNumber = sub.id.substring(4, 12).toUpperCase()
-
-      // Calculate the next billing date based on created date and billing cycle
-      const createdDate = (sub as any).created ? new Date((sub as any).created * 1000) : null
-      const nextBillingDate = createdDate ? new Date(createdDate.getTime() + (30 * 24 * 60 * 60 * 1000)) : null
-
-      return {
-        id: sub.id,
-        status: sub.status,
-        current_period_end: (sub as any).current_period_end || (nextBillingDate ? Math.floor(nextBillingDate.getTime() / 1000) : 0),
-        orderNumber,
-        serverName: sub.metadata.serverName || null,
-        domainList: sub.metadata.domainList || null,
+    for (const server of orgServers) {
+      if (!server.serverName && server.subscriptionId && stripe) {
+        try {
+          const stripeSub = await stripe.subscriptions.retrieve(server.subscriptionId)
+          const stripeName =
+            stripeSub.metadata?.serverName?.trim() ||
+            stripeSub.description?.trim() ||
+            null
+          if (stripeName) {
+            await prisma.server.update({
+              where: { id: server.id },
+              data: {
+                serverName: stripeName,
+                updatedAt: new Date(),
+              },
+            })
+            server.serverName = stripeName
+          }
+        } catch (err) {
+          console.error(
+            `Failed to sync server name from Stripe for subscription ${server.subscriptionId}:`,
+            err
+          )
+        }
       }
-    })
+    }
+
+    const formattedSubscriptions = orgServers.map(server => ({
+      id: server.id,
+      status: server.status || "active",
+      current_period_end: null,
+      orderNumber: server.id.substring(0, 8).toUpperCase(),
+      serverName: server.serverName || null,
+      domainList: null,
+      ipAddress: server.ipAddress || null,
+      subscriptionId: server.subscriptionId,
+    }))
 
     return NextResponse.json({
       subscriptions: formattedSubscriptions,
