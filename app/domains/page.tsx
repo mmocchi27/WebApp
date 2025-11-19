@@ -111,7 +111,6 @@ export default function Domains() {
   const [showDeleteDomainModal, setShowDeleteDomainModal] = useState(false)
   const [selectedDomainsToDelete, setSelectedDomainsToDelete] = useState<Set<string>>(new Set())
   const [deletingDomains, setDeletingDomains] = useState(false)
-  const [showPendingNotice, setShowPendingNotice] = useState(false)
   const [showNameserverInstructions, setShowNameserverInstructions] = useState(false)
   const lastOrgIdRef = useRef<string | null>(null)
   const successfulAddedDomains = addedDomains.filter(item => item.status === 'success')
@@ -145,15 +144,6 @@ export default function Domains() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedServerId])
 
-  // Show pending notice when there are domains that need status check or are pending
-  useEffect(() => {
-    const hasPendingDomains = domains.some(d => 
-      !d.lastCheckedAt || (d.cloudflareStatus === 'pending' && d.cloudflareStatus !== 'active')
-    )
-    if (hasPendingDomains) {
-      setShowPendingNotice(true)
-    }
-  }, [domains])
 
   const storageKey = organization?.id ? `selectedServer_${organization.id}` : null
   useEffect(() => {
@@ -835,29 +825,6 @@ export default function Domains() {
           </div>
         )}
 
-        {/* Pending Domains Notice */}
-        {showPendingNotice && (
-          <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <svg className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-sm text-blue-800">
-                  Domains being marked as pending right after creation is normal. Please allow 30 minutes for nameservers to populate after you've adjusted within your registrar. If the domain is marked "Inactive" after checking the status, this just means the nameserver has not taken hold of the new domain. Recheck every 30 minutes by clicking "Check Status".
-                </p>
-              </div>
-              <button
-                onClick={() => setShowPendingNotice(false)}
-                className="text-blue-600 hover:text-blue-800 ml-4 flex-shrink-0"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Content */}
         {subscriptions.length === 0 ? (
