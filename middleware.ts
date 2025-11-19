@@ -19,10 +19,6 @@ export default clerkMiddleware(
 
 export const config = {
   matcher: [
-    "/servers/:path*",
-    "/checkout/:path*",
-    "/user-management/:path*",
-    "/billing/:path*",
-    "/admin/:path*",
+    "/((?!_next|[^?]*.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
   ],
 }
