@@ -1121,7 +1121,7 @@ export default function Domains() {
                                           </span>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                          <p className="max-w-xs">Please allow nameservers to populate. This could take a few hours. Check back every 30 minutes.</p>
+                                          <p className="max-w-xs">Please allow time for nameserver propagation. This can take up to an hour. Click check status every 30 minutes.</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
