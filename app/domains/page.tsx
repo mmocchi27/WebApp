@@ -85,7 +85,6 @@ export default function Domains() {
   const { organization, isLoaded: orgLoaded } = useOrganization()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [openingBilling, setOpeningBilling] = useState(false)
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [selectedServerId, setSelectedServerId] = useState<string>("")
   const [domains, setDomains] = useState<Domain[]>([])
@@ -719,33 +718,6 @@ export default function Domains() {
       setDnsError("Failed to export CSV")
     } finally {
       setExportingCsv(false)
-    }
-  }
-
-  const handleOpenBilling = async () => {
-    setOpeningBilling(true)
-    try {
-      const response = await fetch("/api/create-portal-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          returnUrl: `${window.location.origin}/domains`,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        window.location.href = data.url
-      } else {
-        console.error("Failed to open billing portal:", data.error)
-        setOpeningBilling(false)
-      }
-    } catch (error) {
-      console.error("Error opening portal:", error)
-      setOpeningBilling(false)
     }
   }
 

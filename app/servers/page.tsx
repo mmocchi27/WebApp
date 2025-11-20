@@ -41,7 +41,6 @@ export default function Servers() {
   const [domainLists, setDomainLists] = useState<Record<string, string>>({})
   const [ipAddresses, setIpAddresses] = useState<Record<string, string>>({})
   const [showOrgCreation, setShowOrgCreation] = useState(false)
-  const [openingBilling, setOpeningBilling] = useState(false)
   const [editingServerIds, setEditingServerIds] = useState<Set<string>>(new Set())
   const lastOrgIdRef = useRef<string | null>(null)
   const editingServerIdsRef = useRef<Set<string>>(new Set())
@@ -257,34 +256,6 @@ export default function Servers() {
         return 'text-orange-600 bg-orange-100'
       default:
         return 'text-gray-600 bg-gray-100'
-    }
-  }
-
-  const handleOpenBilling = async () => {
-    setOpeningBilling(true)
-    try {
-      const response = await fetch('/api/create-portal-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          returnUrl: `${window.location.origin}/servers`
-        }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        window.location.href = data.url
-      } else {
-        alert(data.error || 'Failed to open billing portal')
-        setOpeningBilling(false)
-      }
-    } catch (error) {
-      console.error('Error opening billing portal:', error)
-      alert('Failed to open billing portal. Please try again.')
-      setOpeningBilling(false)
     }
   }
 

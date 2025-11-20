@@ -105,10 +105,6 @@ export default function CheckoutPage() {
     router.push("/")
   }
 
-  const handleBackToServers = () => {
-    router.push("/servers")
-  }
-
   const calculateInboxes = () => quantity * 102
   const calculateSendingVolume = () => quantity * 100
   const calculatePrice = () => quantity * 250
@@ -153,9 +149,6 @@ export default function CheckoutPage() {
             </svg>
             <span className="font-semibold text-gray-900">MailMountains</span>
           </div>
-          <Button variant="outline" onClick={handleBackToServers}>
-            Back to Servers
-          </Button>
         </div>
       </div>
 

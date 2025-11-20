@@ -118,12 +118,6 @@ export default function Billing() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Button
-                onClick={() => router.push("/servers")}
-                variant="outline"
-              >
-                Back to Servers
-              </Button>
               <div className="flex items-center gap-4">
                 <OrganizationSwitcher 
                   hidePersonal={true}

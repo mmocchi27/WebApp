@@ -24,7 +24,6 @@ export default function UserManagement() {
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState("")
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null)
-  const [openingBilling, setOpeningBilling] = useState(false)
   const [permissionError, setPermissionError] = useState(false)
   const lastOrgIdRef = useRef<string | null>(null)
 
@@ -128,34 +127,6 @@ export default function UserManagement() {
     }
   }
 
-  const handleOpenBilling = async () => {
-    setOpeningBilling(true)
-    try {
-      const response = await fetch('/api/create-portal-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          returnUrl: `${window.location.origin}/user-management`
-        }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        window.location.href = data.url
-      } else {
-        alert(data.error || 'Failed to open billing portal')
-        setOpeningBilling(false)
-      }
-    } catch (error) {
-      console.error('Error opening billing portal:', error)
-      alert('Failed to open billing portal. Please try again.')
-      setOpeningBilling(false)
-    }
-  }
-
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gray-50 flex">
@@ -201,12 +172,6 @@ export default function UserManagement() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Button
-                onClick={() => router.push("/servers")}
-                variant="outline"
-              >
-                Back to Servers
-              </Button>
               <div className="flex items-center gap-4">
                 <OrganizationSwitcher 
                   hidePersonal={true}
@@ -458,16 +423,21 @@ export default function UserManagement() {
         >
           Domains
         </Button>
+        <Button
+          onClick={() => router.push("/inboxes")}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
+        >
+          Inboxes
+        </Button>
       </div>
 
       {/* Bottom Left Buttons */}
       <div className="fixed bottom-8 left-8 flex flex-col gap-4">
         <Button
-          onClick={handleOpenBilling}
-          disabled={openingBilling}
+          onClick={() => router.push("/billing")}
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
         >
-          {openingBilling ? "Opening..." : "Billing"}
+          Billing
         </Button>
         <Button
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
