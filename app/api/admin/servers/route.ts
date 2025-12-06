@@ -117,13 +117,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 })
     }
 
+    const searchParams = request.nextUrl.searchParams
+    const orgId = searchParams.get("orgId")?.trim()
+
     const servers = await prisma.server.findMany({
+      where: orgId ? { organizationId: orgId } : undefined,
       orderBy: {
         createdAt: 'desc'
       }
     })
 
-    return NextResponse.json({ servers })
+    const filteredServers = orgId
+      ? servers.filter(server => {
+          const normalizedStatus = server.status?.toLowerCase()
+          return normalizedStatus === 'active' || normalizedStatus === 'pending'
+        })
+      : servers
+
+    return NextResponse.json({ servers: filteredServers })
   } catch (error) {
     console.error("Error fetching all servers:", error)
     return NextResponse.json({ error: "Failed to fetch servers" }, { status: 500 })
