@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 import axios from "axios"
 import https from "https"
 
 const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4'
 const CLOUDFLARE_TOKEN = process.env.CLOUDFLARE_API_TOKEN
+
+// Helper function to check if user is admin
+async function isAdmin(userId: string): Promise<boolean> {
+  try {
+    const client = await clerkClient()
+    const user = await client.users.getUser(userId)
+    const userEmail = user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress
+    const adminEmail = process.env.ADMIN_EMAIL || 'mitch@mailmountains.com'
+    return userEmail === adminEmail
+  } catch (error) {
+    console.error('Error checking admin status:', error)
+    return false
+  }
+}
 
 // Create axios instance for MailCow that allows self-signed certificates
 const axiosInstance = axios.create({
@@ -381,8 +395,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
     }
 
-    // Verify user has access to this server
-    if (server.organizationId !== orgId) {
+    // Verify user has access to this server (or is admin)
+    const userIsAdmin = await isAdmin(userId)
+    if (!userIsAdmin && server.organizationId !== orgId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
