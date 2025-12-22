@@ -6,7 +6,6 @@ import https from "https"
 
 const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4'
 const CLOUDFLARE_TOKEN = process.env.CLOUDFLARE_API_TOKEN
-const MAX_DOMAINS_PER_SERVER = 34
 
 // Create axios instance for MailCow that allows self-signed certificates
 const axiosInstance = axios.create({
@@ -116,11 +115,12 @@ export async function POST(request: NextRequest) {
       where: { serverId: server.id },
     })
 
-    if (domainCount >= MAX_DOMAINS_PER_SERVER) {
+    const serverDomainLimit = server.domainLimit ?? 34
+    if (domainCount >= serverDomainLimit) {
       return NextResponse.json(
         {
           error: "Domain limit reached",
-          message: `Each server can have a maximum of ${MAX_DOMAINS_PER_SERVER} domains.`,
+          message: `This server can have a maximum of ${serverDomainLimit} domains.`,
         },
         { status: 400 }
       )

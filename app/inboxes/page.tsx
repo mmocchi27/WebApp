@@ -42,10 +42,11 @@ interface Subscription {
   status: string
   serverName?: string | null
   ipAddress?: string | null
+  domainLimit?: number
+  inboxLimit?: number
 }
 
-const MAX_INBOXES_PER_DOMAIN = 5
-const MAX_INBOXES_PER_SERVER = 102
+const MAX_INBOXES_PER_DOMAIN = 5 // Business rule: fixed limit per domain
 
 interface Domain {
   id: string
@@ -112,7 +113,9 @@ export default function InboxesPage() {
   >([])
   const [pageNotice, setPageNotice] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const serverInboxCount = inboxesData.length
-  const serverRemainingInboxSlots = Math.max(0, MAX_INBOXES_PER_SERVER - serverInboxCount)
+  const selectedServer = subscriptions.find(sub => sub.id === selectedServerId)
+  const serverInboxLimit = selectedServer?.inboxLimit ?? 102
+  const serverRemainingInboxSlots = Math.max(0, serverInboxLimit - serverInboxCount)
   const serverAtCapacity = serverRemainingInboxSlots === 0
   const handleExportOption = async (destination: "Instantly" | "Smartlead") => {
     if (!selectedServerId) {
@@ -673,7 +676,7 @@ const handleOpenCreateInboxes = () => {
     if (!selectedServerId || !canSubmit || creatingInboxes) return
 
     const totalRequested = flattenedInboxRows.length
-    if (serverInboxCount + totalRequested > MAX_INBOXES_PER_SERVER) {
+    if (serverInboxCount + totalRequested > serverInboxLimit) {
       setCreationError(
         serverRemainingInboxSlots === 0
           ? "Server inbox limit reached. Purchase another server to add more inboxes."
@@ -1067,12 +1070,12 @@ const handleOpenCreateInboxes = () => {
                 <div className="flex justify-end px-4 py-2 border-t">
                   <span
                     className={
-                      inboxesData.length >= MAX_INBOXES_PER_SERVER
-                        ? "text-sm text-red-600 font-semibold"
-                        : "text-sm text-gray-900 font-semibold"
-                    }
-                  >
-                    {inboxesData.length} / {MAX_INBOXES_PER_SERVER}
+                      inboxesData.length >= serverInboxLimit
+                          ? "text-sm text-red-600 font-semibold"
+                          : "text-sm text-gray-900 font-semibold"
+                      }
+                    >
+                      {inboxesData.length} / {serverInboxLimit}
                   </span>
                 </div>
               </CardContent>

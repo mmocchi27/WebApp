@@ -36,16 +36,11 @@ export async function GET(request: NextRequest) {
 
     // Get all subscription IDs for this organization from the database
     // This ensures we only show subscriptions that belong to THIS org
+    // Note: Using findMany without select to get all fields, including domainLimit/inboxLimit if they exist
+    // If migration hasn't been run yet, these will be undefined and we'll use defaults
     const orgServers = await prisma.server.findMany({
       where: {
         organizationId: organizationId,
-      },
-      select: {
-        id: true,
-        subscriptionId: true,
-        serverName: true,
-        ipAddress: true,
-        status: true,
       },
     })
 
@@ -85,6 +80,9 @@ export async function GET(request: NextRequest) {
       domainList: null,
       ipAddress: server.ipAddress || null,
       subscriptionId: server.subscriptionId,
+      // Use optional chaining and nullish coalescing to handle missing columns before migration
+      domainLimit: (server as any).domainLimit ?? 34,
+      inboxLimit: (server as any).inboxLimit ?? 102,
     }))
 
     return NextResponse.json({

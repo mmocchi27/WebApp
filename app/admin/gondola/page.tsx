@@ -27,6 +27,8 @@ interface Server {
   apiKey: string | null
   hostname: string | null
   status: string
+  domainLimit: number
+  inboxLimit: number
   createdAt: string
   updatedAt: string
 }
@@ -72,9 +74,18 @@ type ServerFormState = {
   apiKey: string
   hostname: string
   status: string
+  domainLimit: string
+  inboxLimit: string
 }
 
-type EditableField = keyof Pick<Server, 'serverName' | 'ipAddress' | 'apiKey' | 'hostname' | 'status'>
+type EditableField =
+  | 'serverName'
+  | 'ipAddress'
+  | 'apiKey'
+  | 'hostname'
+  | 'status'
+  | 'domainLimit'
+  | 'inboxLimit'
 
 export default function AdminGondola() {
   const { user, isLoaded } = useUser()
@@ -163,7 +174,9 @@ export default function AdminGondola() {
           ipAddress: server.ipAddress || '',
           apiKey: server.apiKey || '',
           hostname: server.hostname || '',
-          status: server.status
+          status: server.status,
+          domainLimit: String(server.domainLimit ?? 34),
+          inboxLimit: String(server.inboxLimit ?? 102),
         }
       })
       setFormData(nextFormData)
@@ -190,8 +203,13 @@ export default function AdminGondola() {
         ipAddress: '',
         apiKey: '',
         hostname: '',
-        status: 'pending'
+        status: 'pending',
+        domainLimit: '34',
+        inboxLimit: '102',
       }
+
+    const parsedDomainLimit = parseInt(currentValues.domainLimit, 10)
+    const parsedInboxLimit = parseInt(currentValues.inboxLimit, 10)
 
     try {
       const response = await fetch('/api/admin/servers', {
@@ -206,7 +224,9 @@ export default function AdminGondola() {
           ipAddress: currentValues.ipAddress,
           apiKey: currentValues.apiKey,
           hostname: currentValues.hostname,
-          status: currentValues.status
+          status: currentValues.status,
+          domainLimit: Number.isFinite(parsedDomainLimit) && parsedDomainLimit > 0 ? parsedDomainLimit : undefined,
+          inboxLimit: Number.isFinite(parsedInboxLimit) && parsedInboxLimit > 0 ? parsedInboxLimit : undefined,
         }),
       })
 
@@ -246,7 +266,9 @@ export default function AdminGondola() {
       ipAddress: server.ipAddress || '',
       apiKey: server.apiKey || '',
       hostname: server.hostname || '',
-      status: server.status
+      status: server.status,
+      domainLimit: String(server.domainLimit ?? 34),
+      inboxLimit: String(server.inboxLimit ?? 102),
     }
 
     const updatedValues: ServerFormState = {
@@ -254,8 +276,14 @@ export default function AdminGondola() {
       ...(nextValue !== undefined ? { [field]: nextValue } : {}),
     } as ServerFormState
 
-    const currentServerValue = (server[field] || '') as string
-    const pendingValue = updatedValues[field] || ''
+    const serverValueRaw = server[field as keyof Server]
+    const currentServerValue =
+      serverValueRaw === null || serverValueRaw === undefined
+        ? ''
+        : typeof serverValueRaw === 'number'
+        ? String(serverValueRaw)
+        : String(serverValueRaw)
+    const pendingValue = (updatedValues[field] || '').trim()
 
     if (currentServerValue === pendingValue) {
       return
@@ -618,6 +646,8 @@ export default function AdminGondola() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">API Key</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hostname</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domain Limit</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inbox Limit</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Updated At</th>
                       </tr>
@@ -716,6 +746,40 @@ export default function AdminGondola() {
                               <option value="active">Active</option>
                               <option value="suspended">Suspended</option>
                             </select>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={formData[server.id]?.domainLimit ?? '34'}
+                              onChange={(e) => handleChange(server.id, 'domainLimit', e.target.value)}
+                              onBlur={(e) => void handleFieldCommit(server.id, 'domainLimit', e.currentTarget.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  e.currentTarget.blur()
+                                }
+                              }}
+                              className="w-full"
+                              disabled={savingField === `${server.id}-domainLimit`}
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={formData[server.id]?.inboxLimit ?? '102'}
+                              onChange={(e) => handleChange(server.id, 'inboxLimit', e.target.value)}
+                              onBlur={(e) => void handleFieldCommit(server.id, 'inboxLimit', e.currentTarget.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  e.currentTarget.blur()
+                                }
+                              }}
+                              className="w-full"
+                              disabled={savingField === `${server.id}-inboxLimit`}
+                            />
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.createdAt).toLocaleString()}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.updatedAt).toLocaleString()}</td>

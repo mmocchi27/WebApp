@@ -50,9 +50,9 @@ interface Subscription {
   status: string
   currentPeriodEnd: string
   serverName?: string
+  domainLimit?: number
+  inboxLimit?: number
 }
-
-const MAX_DOMAINS_PER_SERVER = 34
 
 interface Domain {
   id?: string
@@ -435,7 +435,9 @@ export default function Domains() {
     }
 
     const currentDomainCount = domains.length
-    const slotsRemaining = Math.max(0, MAX_DOMAINS_PER_SERVER - currentDomainCount)
+    const selectedServer = subscriptions.find(sub => sub.id === selectedServerId)
+    const serverDomainLimit = selectedServer?.domainLimit ?? 34
+    const slotsRemaining = Math.max(0, serverDomainLimit - currentDomainCount)
 
     if (slotsRemaining === 0) {
       setAddDomainError("purchase another server to add more domains")
@@ -1176,12 +1178,20 @@ export default function Domains() {
                   <div className="flex justify-end px-4 py-2 border-t">
                     <span
                       className={
-                        domains.length >= MAX_DOMAINS_PER_SERVER
+                        (() => {
+                          const selectedServer = subscriptions.find(sub => sub.id === selectedServerId)
+                          const serverDomainLimit = selectedServer?.domainLimit ?? 34
+                          return domains.length >= serverDomainLimit
+                        })()
                           ? "text-sm text-red-600 font-semibold"
                           : "text-sm text-gray-900 font-semibold"
                       }
                     >
-                      {domains.length} / {MAX_DOMAINS_PER_SERVER}
+                      {(() => {
+                        const selectedServer = subscriptions.find(sub => sub.id === selectedServerId)
+                        const serverDomainLimit = selectedServer?.domainLimit ?? 34
+                        return `${domains.length} / ${serverDomainLimit}`
+                      })()}
                     </span>
                   </div>
                 </div>
