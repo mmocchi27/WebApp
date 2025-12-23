@@ -1,0 +1,59 @@
+name: mailmountains
+services:
+  - name: web
+    github:
+      repo: mmocchi27/WebApp
+      branch: main
+      deploy_on_push: true
+    build_command: npm install && npx prisma generate && npm run build
+    run_command: npm start
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    routes:
+      - path: /
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: BLACKLISTMASTER_API_KEY
+        scope: RUN_TIME
+        value: ${BLACKLISTMASTER_API_KEY}
+      - key: SLACK_WEBHOOK_URL
+        scope: RUN_TIME
+        value: ${SLACK_WEBHOOK_URL}
+      - key: CRON_SECRET
+        scope: RUN_TIME
+        value: ${CRON_SECRET}
+      - key: ADMIN_EMAIL
+        scope: RUN_TIME
+        value: ${ADMIN_EMAIL}
+      # Add other required env vars here (Clerk, Stripe, etc.)
+
+jobs:
+  - name: check-ip-blacklists
+    github:
+      repo: mmocchi27/WebApp
+      branch: main
+    run_command: node scripts/check-ip-blacklists.js
+    schedule:
+      cron: "0 0 * * *"  # Every day at midnight UTC
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: BLACKLISTMASTER_API_KEY
+        scope: RUN_TIME
+        value: ${BLACKLISTMASTER_API_KEY}
+      - key: SLACK_WEBHOOK_URL
+        scope: RUN_TIME
+        value: ${SLACK_WEBHOOK_URL}
+      - key: CRON_SECRET
+        scope: RUN_TIME
+        value: ${CRON_SECRET}
+      - key: APP_URL
+        scope: RUN_TIME
+        value: ${_APP_URL}
+

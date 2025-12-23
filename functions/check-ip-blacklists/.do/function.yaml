@@ -1,0 +1,9 @@
+name: check-ip-blacklists
+runtime: nodejs:20
+main: index.js
+parameters:
+  APP_URL:
+    default: ""
+  CRON_SECRET:
+    default: ""
+
