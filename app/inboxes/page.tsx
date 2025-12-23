@@ -676,8 +676,6 @@ const handleOpenCreateInboxes = () => {
     if (!selectedServerId || !canSubmit || creatingInboxes) return
 
     const totalRequested = flattenedInboxRows.length
-    const selectedServer = subscriptions.find(sub => sub.id === selectedServerId)
-    const serverInboxLimit = selectedServer?.inboxLimit ?? 102
     if (serverInboxCount + totalRequested > serverInboxLimit) {
       setCreationError(
         serverRemainingInboxSlots === 0
@@ -1072,20 +1070,12 @@ const handleOpenCreateInboxes = () => {
                 <div className="flex justify-end px-4 py-2 border-t">
                   <span
                     className={
-                      (() => {
-                        const selectedServer = subscriptions.find(sub => sub.id === selectedServerId)
-                        const serverInboxLimit = selectedServer?.inboxLimit ?? 102
-                        return inboxesData.length >= serverInboxLimit
-                      })()
-                        ? "text-sm text-red-600 font-semibold"
-                        : "text-sm text-gray-900 font-semibold"
-                    }
-                  >
-                    {(() => {
-                      const selectedServer = subscriptions.find(sub => sub.id === selectedServerId)
-                      const serverInboxLimit = selectedServer?.inboxLimit ?? 102
-                      return `${inboxesData.length} / ${serverInboxLimit}`
-                    })()}
+                      inboxesData.length >= serverInboxLimit
+                          ? "text-sm text-red-600 font-semibold"
+                          : "text-sm text-gray-900 font-semibold"
+                      }
+                    >
+                      {inboxesData.length} / {serverInboxLimit}
                   </span>
                 </div>
               </CardContent>

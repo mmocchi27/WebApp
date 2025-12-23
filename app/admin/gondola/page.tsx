@@ -27,6 +27,8 @@ interface Server {
   apiKey: string | null
   hostname: string | null
   status: string
+  domainLimit: number
+  inboxLimit: number
   createdAt: string
   updatedAt: string
 }
@@ -72,9 +74,18 @@ type ServerFormState = {
   apiKey: string
   hostname: string
   status: string
+  domainLimit: string
+  inboxLimit: string
 }
 
-type EditableField = keyof Pick<Server, 'serverName' | 'ipAddress' | 'apiKey' | 'hostname' | 'status'>
+type EditableField =
+  | 'serverName'
+  | 'ipAddress'
+  | 'apiKey'
+  | 'hostname'
+  | 'status'
+  | 'domainLimit'
+  | 'inboxLimit'
 
 export default function AdminGondola() {
   const { user, isLoaded } = useUser()
@@ -100,6 +111,7 @@ export default function AdminGondola() {
   const [expandedDomainId, setExpandedDomainId] = useState<string | null>(null)
   const [exportingNameservers, setExportingNameservers] = useState(false)
   const [exportingInboxes, setExportingInboxes] = useState<"Instantly" | "Smartlead" | null>(null)
+  const [checkingDomainStatus, setCheckingDomainStatus] = useState(false)
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -125,14 +137,20 @@ export default function AdminGondola() {
     }
   }, [isLoaded, user, router])
 
-  const fetchServers = async (orgId: string) => {
+  const fetchServers = async (query: string) => {
     setLoading(true)
     setFetchError(null)
     setTableError(null)
     setHasSearched(true)
 
     try {
-      const response = await fetch(`/api/admin/servers?orgId=${encodeURIComponent(orgId)}`)
+      // Determine if it's an org ID (starts with org_) or subscription ID (starts with sub_)
+      const isSubscriptionId = query.startsWith('sub_')
+      const url = isSubscriptionId 
+        ? `/api/admin/servers?subscriptionId=${encodeURIComponent(query)}`
+        : `/api/admin/servers?orgId=${encodeURIComponent(query)}`
+      
+      const response = await fetch(url)
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         setServers([])
@@ -156,7 +174,9 @@ export default function AdminGondola() {
           ipAddress: server.ipAddress || '',
           apiKey: server.apiKey || '',
           hostname: server.hostname || '',
-          status: server.status
+          status: server.status,
+          domainLimit: String(server.domainLimit ?? 34),
+          inboxLimit: String(server.inboxLimit ?? 102),
         }
       })
       setFormData(nextFormData)
@@ -183,8 +203,13 @@ export default function AdminGondola() {
         ipAddress: '',
         apiKey: '',
         hostname: '',
-        status: 'pending'
+        status: 'pending',
+        domainLimit: '34',
+        inboxLimit: '102',
       }
+
+    const parsedDomainLimit = parseInt(currentValues.domainLimit, 10)
+    const parsedInboxLimit = parseInt(currentValues.inboxLimit, 10)
 
     try {
       const response = await fetch('/api/admin/servers', {
@@ -199,7 +224,9 @@ export default function AdminGondola() {
           ipAddress: currentValues.ipAddress,
           apiKey: currentValues.apiKey,
           hostname: currentValues.hostname,
-          status: currentValues.status
+          status: currentValues.status,
+          domainLimit: Number.isFinite(parsedDomainLimit) && parsedDomainLimit > 0 ? parsedDomainLimit : undefined,
+          inboxLimit: Number.isFinite(parsedInboxLimit) && parsedInboxLimit > 0 ? parsedInboxLimit : undefined,
         }),
       })
 
@@ -239,7 +266,9 @@ export default function AdminGondola() {
       ipAddress: server.ipAddress || '',
       apiKey: server.apiKey || '',
       hostname: server.hostname || '',
-      status: server.status
+      status: server.status,
+      domainLimit: String(server.domainLimit ?? 34),
+      inboxLimit: String(server.inboxLimit ?? 102),
     }
 
     const updatedValues: ServerFormState = {
@@ -247,8 +276,14 @@ export default function AdminGondola() {
       ...(nextValue !== undefined ? { [field]: nextValue } : {}),
     } as ServerFormState
 
-    const currentServerValue = (server[field] || '') as string
-    const pendingValue = updatedValues[field] || ''
+    const serverValueRaw = server[field as keyof Server]
+    const currentServerValue =
+      serverValueRaw === null || serverValueRaw === undefined
+        ? ''
+        : typeof serverValueRaw === 'number'
+        ? String(serverValueRaw)
+        : String(serverValueRaw)
+    const pendingValue = (updatedValues[field] || '').trim()
 
     if (currentServerValue === pendingValue) {
       return
@@ -349,6 +384,72 @@ export default function AdminGondola() {
     }
   }
 
+  const handleCheckDomainStatus = async () => {
+    if (!subscriptionDetails || !subscriptionDetails.server || subscriptionDetails.domains.length === 0) return
+
+    setCheckingDomainStatus(true)
+    setDetailsNotice(null)
+
+    try {
+      // Check each domain one at a time
+      let updatedCount = 0
+      let errorCount = 0
+
+      for (const domain of subscriptionDetails.domains) {
+        try {
+          const response = await fetch('/api/domains/check-status', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              serverId: subscriptionDetails.server.id,
+              domainId: domain.id
+            })
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            console.error(`Error checking ${domain.domainName}:`, errorData)
+            errorCount++
+            continue
+          }
+
+          const data = await response.json()
+          if (data.updated > 0) {
+            updatedCount += data.updated
+          }
+
+          // Small delay between requests to avoid overwhelming the API
+          await new Promise(resolve => setTimeout(resolve, 100))
+        } catch (error) {
+          console.error(`Error checking ${domain.domainName}:`, error)
+          errorCount++
+        }
+      }
+
+      // Refresh the subscription details to show updated status
+      await fetchSubscriptionDetails(subscriptionDetails.server.subscriptionId)
+
+      if (errorCount > 0) {
+        setDetailsNotice({ 
+          type: "error", 
+          text: `Status check completed with ${errorCount} error(s). ${updatedCount} domain(s) updated.` 
+        })
+      } else {
+        setDetailsNotice({ 
+          type: "success", 
+          text: `Status check completed. ${updatedCount} domain(s) updated.` 
+        })
+      }
+    } catch (error) {
+      console.error("Error checking domain status:", error)
+      setDetailsNotice({ type: "error", text: "Failed to check domain status. Please try again." })
+    } finally {
+      setCheckingDomainStatus(false)
+    }
+  }
+
   const handleExportInboxes = async (destination: "Instantly" | "Smartlead") => {
     if (typeof window === "undefined") return
     if (!subscriptionDetails?.server?.id) return
@@ -407,7 +508,7 @@ export default function AdminGondola() {
   const handleQuerySubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!queryOrgId.trim()) {
-      setOrgInputError("Organization ID is required")
+      setOrgInputError("Organization ID or Subscription ID is required")
       return
     }
 
@@ -416,10 +517,10 @@ export default function AdminGondola() {
       return
     }
 
-    const normalizedOrgId = queryOrgId.trim()
+    const normalizedQuery = queryOrgId.trim()
     setOrgInputError(null)
-    setCurrentOrgId(normalizedOrgId)
-    fetchServers(normalizedOrgId)
+    setCurrentOrgId(normalizedQuery)
+    fetchServers(normalizedQuery)
   }
 
   const handleClearQuery = () => {
@@ -472,17 +573,17 @@ export default function AdminGondola() {
         {/* Org Lookup */}
         <Tabs defaultValue="org" className="mb-8 flex flex-col items-center">
           <TabsList>
-            <TabsTrigger value="org">Org ID Lookup</TabsTrigger>
+            <TabsTrigger value="org">Search</TabsTrigger>
           </TabsList>
           <TabsContent value="org" className="w-full max-w-3xl">
             <Card>
               <CardContent className="pt-6">
                 <form onSubmit={handleQuerySubmit} className="flex flex-col gap-4 md:flex-row md:items-end">
                   <div className="flex-1">
-                    <Label htmlFor="orgId">Organization ID</Label>
+                    <Label htmlFor="orgId">Organization ID or Subscription ID</Label>
                     <Input
                       id="orgId"
-                      placeholder="org_35fvmZQfMIl9YuY6mFJ13r9Bq8o"
+                      placeholder="org_35fvmZQfMIl9YuY6mFJ13r9Bq8o or sub_1ABC..."
                       value={queryOrgId}
                       onChange={(e) => setQueryOrgId(e.target.value)}
                       autoComplete="off"
@@ -530,7 +631,7 @@ export default function AdminGondola() {
                 </div>
               ) : servers.length === 0 ? (
                 <div className="py-12 text-center">
-                  <p className="text-gray-500">No active or pending servers found for {currentOrgId}.</p>
+                  <p className="text-gray-500">No active or pending servers found for {currentOrgId || 'your search'}.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -545,6 +646,8 @@ export default function AdminGondola() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">API Key</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hostname</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domain Limit</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inbox Limit</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Updated At</th>
                       </tr>
@@ -644,6 +747,40 @@ export default function AdminGondola() {
                               <option value="suspended">Suspended</option>
                             </select>
                           </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={formData[server.id]?.domainLimit ?? '34'}
+                              onChange={(e) => handleChange(server.id, 'domainLimit', e.target.value)}
+                              onBlur={(e) => void handleFieldCommit(server.id, 'domainLimit', e.currentTarget.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  e.currentTarget.blur()
+                                }
+                              }}
+                              className="w-full"
+                              disabled={savingField === `${server.id}-domainLimit`}
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <Input
+                              type="number"
+                              min={1}
+                              value={formData[server.id]?.inboxLimit ?? '102'}
+                              onChange={(e) => handleChange(server.id, 'inboxLimit', e.target.value)}
+                              onBlur={(e) => void handleFieldCommit(server.id, 'inboxLimit', e.currentTarget.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  e.currentTarget.blur()
+                                }
+                              }}
+                              className="w-full"
+                              disabled={savingField === `${server.id}-inboxLimit`}
+                            />
+                          </td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.createdAt).toLocaleString()}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.updatedAt).toLocaleString()}</td>
                         </tr>
@@ -663,7 +800,7 @@ export default function AdminGondola() {
       </div>
 
       <Dialog open={detailsDialogOpen} onOpenChange={handleDetailsDialogChange}>
-        <DialogContent className="sm:max-w-4xl">
+        <DialogContent className="sm:max-w-7xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Subscription {selectedSubscriptionId || ""}</DialogTitle>
             <DialogDescription>
@@ -711,16 +848,28 @@ export default function AdminGondola() {
                   <h3 className="text-sm font-semibold text-gray-900">
                     Domains ({subscriptionDetails.domains.length})
                   </h3>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleExportNameservers}
-                    disabled={
-                      exportingNameservers || subscriptionDetails.domains.length === 0
-                    }
-                  >
-                    {exportingNameservers ? "Exporting..." : "Export Nameservers"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCheckDomainStatus}
+                      disabled={
+                        checkingDomainStatus || subscriptionDetails.domains.length === 0
+                      }
+                    >
+                      {checkingDomainStatus ? "Checking..." : "Check Status"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleExportNameservers}
+                      disabled={
+                        exportingNameservers || subscriptionDetails.domains.length === 0 || checkingDomainStatus
+                      }
+                    >
+                      {exportingNameservers ? "Exporting..." : "Export Nameservers"}
+                    </Button>
+                  </div>
                 </div>
                 {subscriptionDetails.domains.length === 0 ? (
                   <p className="text-sm text-gray-500">No domains linked to this subscription.</p>
