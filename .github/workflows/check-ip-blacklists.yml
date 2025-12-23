@@ -1,0 +1,45 @@
+name: Check IP Blacklists
+
+on:
+  schedule:
+    # Run daily at midnight UTC (adjust timezone as needed)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows manual triggering
+    inputs:
+      environment:
+        description: 'Environment to check (dev or prod)'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  check-blacklists:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine Environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "env=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" == "refs/heads/dev" ]; then
+            echo "env=dev" >> $GITHUB_OUTPUT
+          else
+            echo "env=prod" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Check IP Blacklists
+        run: |
+          if [ "${{ steps.env.outputs.env }}" == "dev" ]; then
+            APP_URL="${{ secrets.APP_URL_DEV }}"
+          else
+            APP_URL="${{ secrets.APP_URL_PROD }}"
+          fi
+          
+          curl -X POST "${APP_URL}/api/admin/check-all-ips" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
