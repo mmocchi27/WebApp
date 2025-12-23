@@ -201,13 +201,11 @@ export async function POST(request: NextRequest) {
 
         results.checked++
 
-        // Send Slack notification if newly blacklisted or still blacklisted
+        // Send Slack notification every time an IP is blacklisted
         if (isBlacklisted) {
           results.blacklisted++
-          if (!wasBlacklisted) {
-            await sendSlackNotification(server, blacklistResult)
-            results.notifications++
-          }
+          await sendSlackNotification(server, blacklistResult)
+          results.notifications++
         }
       } catch (error: any) {
         console.error(`Error checking IP ${server.ipAddress} for server ${server.id}:`, error)
