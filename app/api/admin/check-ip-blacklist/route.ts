@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 
 const BLACKLISTMASTER_API_BASE = 'https://www.blacklistmaster.com/restapi/v1'
 const BLACKLISTMASTER_API_KEY = process.env.BLACKLISTMASTER_API_KEY
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL
 
 // Helper function to check if user is admin
 async function isAdmin(userId: string): Promise<boolean> {
@@ -76,6 +77,75 @@ async function checkIPBlacklist(ipAddress: string): Promise<{
   }
 }
 
+// Send Slack notification
+async function sendSlackNotification(server: any, blacklistResult: any) {
+  if (!SLACK_WEBHOOK_URL) {
+    console.log('Slack webhook URL not configured, skipping notification')
+    return
+  }
+
+  const blacklistList = blacklistResult.blacklists
+    .map((bl: any) => `• ${bl.blacklist_name} (${bl.blacklist}) - ${bl.blacklist_severity || 'Unknown'} severity`)
+    .join('\n')
+
+  const message = {
+    text: `🚨 IP Address Blacklisted: ${server.ipAddress}`,
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `🚨 IP Address Blacklisted: ${server.ipAddress}`
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*IP Address:*\n\`${server.ipAddress}\``
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Server:*\n${server.serverName || 'Unnamed Server'}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Subscription ID:*\n${server.subscriptionId}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Severity:*\n${blacklistResult.blacklistSeverity || 'None'}`
+          }
+        ]
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Blacklists (${blacklistResult.blacklists.length}):*\n${blacklistList || 'None'}`
+        }
+      }
+    ]
+  }
+
+  try {
+    const response = await fetch(SLACK_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    })
+
+    if (!response.ok) {
+      console.error('Failed to send Slack notification:', response.statusText)
+    }
+  } catch (error) {
+    console.error('Error sending Slack notification:', error)
+  }
+}
+
 // POST - Check blacklist status for a specific server IP
 export async function POST(request: NextRequest) {
   try {
@@ -126,6 +196,11 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date()
       }
     })
+
+    // Send Slack notification if blacklisted
+    if (blacklistResult.status === 'Blacklisted') {
+      await sendSlackNotification(updatedServer, blacklistResult)
+    }
 
     return NextResponse.json({
       success: true,
