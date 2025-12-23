@@ -24,6 +24,10 @@ model Server {
   status         String   @default("pending")
   domainLimit    Int      @default(34)  @map("domain_limit")
   inboxLimit     Int      @default(102) @map("inbox_limit")
+  blacklistStatus String? @map("blacklist_status")
+  blacklistSeverity String? @map("blacklist_severity")
+  blacklistLastChecked DateTime? @map("blacklist_last_checked") @db.Timestamptz(6)
+  blacklists     Json?    @map("blacklists")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
   domains        Domain[]

@@ -29,6 +29,15 @@ interface Server {
   status: string
   domainLimit: number
   inboxLimit: number
+  blacklistStatus?: string | null
+  blacklistSeverity?: string | null
+  blacklistLastChecked?: string | null
+  blacklists?: Array<{
+    blacklist: string
+    blacklist_name: string
+    blacklist_url: string
+    blacklist_severity: string
+  }> | null
   createdAt: string
   updatedAt: string
 }
@@ -112,6 +121,7 @@ export default function AdminGondola() {
   const [exportingNameservers, setExportingNameservers] = useState(false)
   const [exportingInboxes, setExportingInboxes] = useState<"Instantly" | "Smartlead" | null>(null)
   const [checkingDomainStatus, setCheckingDomainStatus] = useState(false)
+  const [checkingIPStatus, setCheckingIPStatus] = useState<string | null>(null)
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -450,6 +460,45 @@ export default function AdminGondola() {
     }
   }
 
+  const handleCheckIPStatus = async (serverId: string) => {
+    setCheckingIPStatus(serverId)
+    setTableError(null)
+
+    try {
+      const response = await fetch('/api/admin/check-ip-blacklist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ serverId }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        setTableError(errorData.error || errorData.message || 'Failed to check IP blacklist status')
+        return
+      }
+
+      const data = await response.json()
+      
+      // Refresh servers to show updated status
+      if (currentOrgId) {
+        await fetchServers(currentOrgId)
+      }
+
+      if (data.blacklistResult?.status === 'Blacklisted') {
+        setTableError(`⚠️ IP is blacklisted: ${data.blacklistResult.blacklists?.length || 0} blacklist(s) found (${data.blacklistResult.blacklistSeverity || 'Unknown'} severity)`)
+      } else {
+        setTableError(null)
+      }
+    } catch (error) {
+      console.error('Error checking IP status:', error)
+      setTableError('Failed to check IP blacklist status. Please try again.')
+    } finally {
+      setCheckingIPStatus(null)
+    }
+  }
+
   const handleExportInboxes = async (destination: "Instantly" | "Smartlead") => {
     if (typeof window === "undefined") return
     if (!subscriptionDetails?.server?.id) return
@@ -648,6 +697,7 @@ export default function AdminGondola() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domain Limit</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inbox Limit</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Blacklist Status</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Updated At</th>
                       </tr>
@@ -780,6 +830,72 @@ export default function AdminGondola() {
                               className="w-full"
                               disabled={savingField === `${server.id}-inboxLimit`}
                             />
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {server.ipAddress ? (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  {server.blacklistStatus === 'Blacklisted' ? (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">
+                                      ⚠️ Blacklisted
+                                    </span>
+                                  ) : server.blacklistStatus === 'Not blacklisted' ? (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">
+                                      ✓ Clean
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-600">
+                                      Not checked
+                                    </span>
+                                  )}
+                                  {server.blacklistSeverity && (
+                                    <span className="text-xs text-gray-500">
+                                      ({server.blacklistSeverity})
+                                    </span>
+                                  )}
+                                </div>
+                                {server.blacklistLastChecked && (
+                                  <p className="text-xs text-gray-500">
+                                    Last checked: {new Date(server.blacklistLastChecked).toLocaleString()}
+                                  </p>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void handleCheckIPStatus(server.id)}
+                                  disabled={checkingIPStatus === server.id || !server.ipAddress}
+                                  className="mt-1 text-xs"
+                                >
+                                  {checkingIPStatus === server.id ? 'Checking...' : 'Check IP Status'}
+                                </Button>
+                                {server.blacklists && server.blacklists.length > 0 && (
+                                  <details className="mt-1">
+                                    <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">
+                                      View {server.blacklists.length} blacklist{server.blacklists.length !== 1 ? 's' : ''}
+                                    </summary>
+                                    <ul className="mt-1 ml-4 text-xs text-gray-600 space-y-1">
+                                      {server.blacklists.map((bl, idx) => (
+                                        <li key={idx}>
+                                          <a
+                                            href={bl.blacklist_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:underline"
+                                          >
+                                            {bl.blacklist_name}
+                                          </a>
+                                          {bl.blacklist_severity && (
+                                            <span className="text-gray-500 ml-1">({bl.blacklist_severity})</span>
+                                          )}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-xs">No IP configured</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.createdAt).toLocaleString()}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.updatedAt).toLocaleString()}</td>
