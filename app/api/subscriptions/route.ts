@@ -40,13 +40,6 @@ export async function GET(request: NextRequest) {
       where: {
         organizationId: organizationId,
       },
-      select: {
-        id: true,
-        subscriptionId: true,
-        serverName: true,
-        ipAddress: true,
-        status: true,
-      },
     })
 
     for (const server of orgServers) {
@@ -85,6 +78,8 @@ export async function GET(request: NextRequest) {
       domainList: null,
       ipAddress: server.ipAddress || null,
       subscriptionId: server.subscriptionId,
+      domainLimit: (server as any).domainLimit ?? 34,
+      inboxLimit: (server as any).inboxLimit ?? 102,
     }))
 
     return NextResponse.json({

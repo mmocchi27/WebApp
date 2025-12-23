@@ -30,11 +30,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 })
     }
 
-    const { subscriptionId, organizationId, serverName, ipAddress, apiKey, hostname, status } = await request.json()
+    const {
+      subscriptionId,
+      organizationId,
+      serverName,
+      ipAddress,
+      apiKey,
+      hostname,
+      status,
+      domainLimit,
+      inboxLimit,
+    } = await request.json()
 
     if (!subscriptionId || !organizationId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
+
+    // Parse and validate limits
+    const parsedDomainLimit =
+      typeof domainLimit === "number" && Number.isFinite(domainLimit) && domainLimit > 0
+        ? Math.floor(domainLimit)
+        : undefined
+    const parsedInboxLimit =
+      typeof inboxLimit === "number" && Number.isFinite(inboxLimit) && inboxLimit > 0
+        ? Math.floor(inboxLimit)
+        : undefined
 
     // Check if server record already exists
     const existingServer = await prisma.server.findFirst({
@@ -56,6 +76,8 @@ export async function POST(request: NextRequest) {
           apiKey: apiKey !== undefined ? apiKey : existingServer.apiKey,
           hostname: hostname !== undefined ? hostname : existingServer.hostname,
           status: status || existingServer.status,
+          domainLimit: parsedDomainLimit ?? existingServer.domainLimit,
+          inboxLimit: parsedInboxLimit ?? existingServer.inboxLimit,
           updatedAt: new Date()
         }
       })
@@ -86,7 +108,9 @@ export async function POST(request: NextRequest) {
           ipAddress: ipAddress || null,
           apiKey: apiKey || null,
           hostname: hostname || null,
-          status: status || 'pending'
+          status: status || 'pending',
+          domainLimit: parsedDomainLimit ?? 34,
+          inboxLimit: parsedInboxLimit ?? 102,
         }
       })
     }

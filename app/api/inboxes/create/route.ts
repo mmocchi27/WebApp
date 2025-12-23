@@ -14,8 +14,7 @@ interface InboxPayload {
   lastName: string
 }
 
-const MAX_INBOXES_PER_DOMAIN = 5
-const MAX_INBOXES_PER_SERVER = 102
+const MAX_INBOXES_PER_DOMAIN = 5 // Business rule: fixed limit per domain
 
 function generatePassword(length = 16) {
   return crypto.randomBytes(length).toString("base64url").slice(0, length)
@@ -71,11 +70,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (currentServerInboxCount + normalizedInboxes.length > MAX_INBOXES_PER_SERVER) {
+    const serverInboxLimit = server.inboxLimit ?? 102
+    if (currentServerInboxCount + normalizedInboxes.length > serverInboxLimit) {
       return NextResponse.json(
         {
           error: "Server inbox limit reached",
-          message: `This server can host up to ${MAX_INBOXES_PER_SERVER} inboxes. Please purchase another server to create more inboxes.`,
+          message: `This server can host up to ${serverInboxLimit} inboxes. Please purchase another server to create more inboxes.`,
         },
         { status: 400 }
       )

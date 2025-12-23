@@ -22,6 +22,8 @@ model Server {
   apiKey         String?  @map("api_key")
   hostname       String?  @map("hostname")
   status         String   @default("pending")
+  domainLimit    Int      @default(34)  @map("domain_limit")
+  inboxLimit     Int      @default(102) @map("inbox_limit")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
   domains        Domain[]
