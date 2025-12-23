@@ -75,13 +75,13 @@ async function sendSlackNotification(server: any, blacklistResult: any) {
     .join('\n')
 
   const message = {
-    text: `🚨 IP Address Blacklisted Alert`,
+    text: `🚨 IP Address Blacklisted: ${server.ipAddress}`,
     blocks: [
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: '🚨 IP Address Blacklisted Alert'
+          text: `🚨 IP Address Blacklisted: ${server.ipAddress}`
         }
       },
       {
@@ -89,19 +89,15 @@ async function sendSlackNotification(server: any, blacklistResult: any) {
         fields: [
           {
             type: 'mrkdwn',
+            text: `*IP Address:*\n\`${server.ipAddress}\``
+          },
+          {
+            type: 'mrkdwn',
             text: `*Server:*\n${server.serverName || 'Unnamed Server'}`
           },
           {
             type: 'mrkdwn',
-            text: `*IP Address:*\n${server.ipAddress}`
-          },
-          {
-            type: 'mrkdwn',
             text: `*Subscription ID:*\n${server.subscriptionId}`
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Status:*\n${blacklistResult.status}`
           },
           {
             type: 'mrkdwn',
@@ -113,7 +109,7 @@ async function sendSlackNotification(server: any, blacklistResult: any) {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Blacklists:*\n${blacklistList || 'None'}`
+          text: `*Blacklists (${blacklistResult.blacklists.length}):*\n${blacklistList || 'None'}`
         }
       }
     ]
