@@ -2,9 +2,9 @@ name: Check IP Blacklists
 
 on:
   schedule:
-    # Run daily at 7:00 AM CST (13:00 UTC)
+    # Run daily at 7:00 AM CST (13:00 UTC) - runs every 24 hours
     - cron: '0 13 * * *'
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch: # Allows manual triggering (when you click "Run workflow")
     inputs:
       environment:
         description: 'Environment to check (dev or prod)'
@@ -18,28 +18,100 @@ jobs:
   check-blacklists:
     runs-on: ubuntu-latest
     steps:
-      - name: Determine Environment
-        id: env
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "env=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref }}" == "refs/heads/dev" ]; then
-            echo "env=dev" >> $GITHUB_OUTPUT
-          else
-            echo "env=prod" >> $GITHUB_OUTPUT
-          fi
-      
       - name: Check IP Blacklists
         run: |
-          if [ "${{ steps.env.outputs.env }}" == "dev" ]; then
-            APP_URL="${{ secrets.APP_URL_DEV }}"
+          # If manually triggered, check only the selected environment
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+            ENVIRONMENTS="$ENV"
+            echo "Manual trigger: Checking $ENV environment only"
           else
-            APP_URL="${{ secrets.APP_URL_PROD }}"
+            # Scheduled run: check both environments
+            ENVIRONMENTS="dev prod"
+            echo "Scheduled run: Checking all environments (dev and prod)"
           fi
           
-          curl -X POST "${APP_URL}/api/admin/check-all-ips" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json"
+          # Check each environment
+          for ENV in $ENVIRONMENTS; do
+            echo "=========================================="
+            echo "Checking $ENV environment..."
+            echo "=========================================="
+            
+            if [ "$ENV" == "dev" ]; then
+              APP_URL="${{ secrets.APP_URL_DEV }}"
+            else
+              APP_URL="${{ secrets.APP_URL_PROD }}"
+            fi
+            
+            if [ -z "$APP_URL" ]; then
+              echo "⚠️  WARNING: APP_URL for $ENV is not set, skipping..."
+              continue
+            fi
+            
+            if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+              echo "❌ ERROR: CRON_SECRET is not set"
+              exit 1
+            fi
+            
+            echo "Calling: ${APP_URL}/api/admin/check-all-ips"
+            
+            # Capture both response and exit code
+            set +e  # Don't exit on curl error
+            RESPONSE=$(curl -X POST "${APP_URL}/api/admin/check-all-ips" \
+              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+              -H "Content-Type: application/json" \
+              -w "\nHTTP_STATUS:%{http_code}" \
+              --max-time 600 \
+              --connect-timeout 30 \
+              -s \
+              2>&1)
+            CURL_EXIT=$?
+            set -e  # Exit on error again
+            
+            if [ $CURL_EXIT -ne 0 ]; then
+              echo "❌ CURL failed for $ENV with exit code: $CURL_EXIT"
+              echo "Response: $RESPONSE"
+              if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                # Manual trigger: fail the workflow
+                exit 1
+              else
+                # Scheduled: continue to next environment
+                echo "Continuing to next environment..."
+                continue
+              fi
+            fi
+            
+            HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d: -f2)
+            BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS/d')
+            
+            echo "HTTP Status: $HTTP_STATUS"
+            echo "Response: $BODY"
+            
+            if [ -z "$HTTP_STATUS" ]; then
+              echo "❌ Error: Could not extract HTTP status code from response for $ENV"
+              echo "Full response: $RESPONSE"
+              if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                exit 1
+              else
+                continue
+              fi
+            fi
+            
+            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+              echo "✅ Success! Blacklist check completed for $ENV."
+            else
+              echo "❌ Error for $ENV: HTTP $HTTP_STATUS"
+              echo "Response body: $BODY"
+              if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                exit 1
+              fi
+            fi
+            
+            echo ""
+          done
+          
+          echo "=========================================="
+          echo "Finished checking all environments"
+          echo "=========================================="
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-
