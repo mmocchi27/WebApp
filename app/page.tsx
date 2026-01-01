@@ -38,7 +38,7 @@ export default function Home() {
   return (
     <div key="home-page" className="min-h-screen bg-white">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4">
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 bg-white">
         <div className="flex items-center gap-2">
           <svg width="32" height="24" viewBox="0 0 32 24" className="flex-shrink-0">
             {/* Mountains */}
@@ -60,29 +60,32 @@ export default function Home() {
       </header>
 
       {/* Hero Section */}
-      <section className="text-center py-20 px-6 relative overflow-hidden">
+      <section className="text-center pt-28 pb-20 px-6 relative overflow-hidden bg-white">
         <div className="absolute inset-0 flex items-center justify-center">
           <svg width="100%" height="200" viewBox="0 0 800 200" className="w-full h-full" preserveAspectRatio="none">
-            {/* Full-width mountains spanning the entire page */}
+            {/* Solid white background */}
+            <rect width="800" height="200" fill="white" />
+            {/* Back mountain range - cartoonish with sharp peaks */}
             <path
-              d="M0 200L100 80L200 120L300 60L400 100L500 40L600 80L700 60L800 120V200H0Z"
+              d="M0 200 L80 120 L120 100 L180 140 L240 80 L300 110 L360 60 L420 90 L480 50 L540 85 L600 55 L660 95 L720 65 L800 100 L800 200 Z"
               fill="#2563eb"
-              opacity="0.1"
-            />
-            <path
-              d="M0 200L80 100L180 140L280 80L380 120L480 60L580 100L680 80L800 120V200H0Z"
-              fill="#1d4ed8"
               opacity="0.08"
+            />
+            {/* Front mountain range - more prominent sharp peaks */}
+            <path
+              d="M0 200 L60 140 L100 110 L160 150 L220 90 L280 120 L340 70 L400 100 L460 60 L520 95 L580 65 L640 105 L700 75 L800 110 L800 200 Z"
+              fill="#1d4ed8"
+              opacity="0.1"
             />
           </svg>
         </div>
         <div className="relative z-10">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
+          <h1 className="text-6xl font-bold text-gray-900 mb-4">
             Get highly performant inboxes
             <br />
             at industry low prices
           </h1>
-          <p className="text-blue-600 text-lg mb-8 max-w-2xl mx-auto">
+          <p className="text-blue-600 text-xl font-medium mb-8 max-w-2xl mx-auto">
             Having issues with Google/Outlook deliverability recently? We've got you covered!
           </p>
           <div className="flex items-center justify-center gap-4 mb-8">
@@ -181,7 +184,7 @@ export default function Home() {
       </section>
 
       {/* Warmed for Delivery Section */}
-      <section className="py-16 px-6 bg-blue-50">
+      <section className="py-16 px-6 bg-white">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-6">Warmed for delivery</h2>
           <p className="text-gray-600 text-lg leading-relaxed max-w-3xl mx-auto">
@@ -191,7 +194,7 @@ export default function Home() {
       </section>
 
       {/* Pricing Section */}
-      <section className="py-16 px-6 bg-gray-50">
+      <section className="py-16 px-6 bg-white">
         <div className="max-w-6xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">
             No lock ins. Month to month for all customers.
