@@ -144,6 +144,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const orgId = searchParams.get("orgId")?.trim()
     const subscriptionId = searchParams.get("subscriptionId")?.trim()
+    const ipAddress = searchParams.get("ipAddress")?.trim()
 
     // Build where clause based on which parameter is provided
     let whereClause: any = undefined
@@ -151,6 +152,8 @@ export async function GET(request: NextRequest) {
       whereClause = { subscriptionId: subscriptionId }
     } else if (orgId) {
       whereClause = { organizationId: orgId }
+    } else if (ipAddress) {
+      whereClause = { ipAddress: ipAddress }
     }
 
     const servers = await prisma.server.findMany({
@@ -160,7 +163,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const filteredServers = (orgId || subscriptionId)
+    const filteredServers = (orgId || subscriptionId || ipAddress)
       ? servers.filter(server => {
           const normalizedStatus = server.status?.toLowerCase()
           return normalizedStatus === 'active' || normalizedStatus === 'pending'

@@ -15,37 +15,101 @@ type MinimalServer = {
 export async function cleanupServerResources(server: MinimalServer) {
   if (!server) return
 
-  if (!server.ipAddress || !server.apiKey) {
-    console.warn(
-      `⚠️  Server ${server.id} missing MailCow credentials; skipping mailbox cleanup`
-    )
+  console.log(`🧹 Starting cleanup for server ${server.id}`)
+
+  // Step 1: Delete all inboxes from MailCow and database
+  console.log(`📨 Step 1: Deleting all inboxes for server ${server.id}`)
+  const allInboxes = await prisma.inbox.findMany({
+    where: { serverId: server.id },
+    select: { id: true, email: true, domainName: true },
+  })
+
+  if (allInboxes.length > 0) {
+    if (server.ipAddress && server.apiKey) {
+      // Group inboxes by domain for better organization in logs
+      const inboxesByDomain = allInboxes.reduce((acc, inbox) => {
+        if (!acc[inbox.domainName]) {
+          acc[inbox.domainName] = []
+        }
+        acc[inbox.domainName].push(inbox)
+        return acc
+      }, {} as Record<string, typeof allInboxes>)
+
+      // Delete inboxes from MailCow (grouped by domain, but we'll delete all at once if possible)
+      // MailCow API accepts an array of email addresses
+      const allEmails = allInboxes.map((inbox) => inbox.email)
+      const httpsAgent = new https.Agent({ rejectUnauthorized: false })
+
+      try {
+        await axios.post(
+          `https://${server.ipAddress}/api/v1/delete/mailbox`,
+          allEmails,
+          {
+            headers: {
+              "X-API-Key": server.apiKey,
+              "Content-Type": "application/json",
+            },
+            timeout: 60000, // Increased timeout for bulk operations
+            httpsAgent,
+          }
+        )
+        console.log(`    ✅ Deleted ${allEmails.length} mailbox(es) from MailCow for server ${server.id}`)
+      } catch (error: any) {
+        console.error(`    ❌ Failed to delete mailboxes from MailCow:`, error?.message)
+        // Continue to delete from database even if MailCow deletion fails
+      }
+    } else {
+      console.warn(
+        `⚠️  Server ${server.id} missing MailCow credentials; skipping MailCow mailbox cleanup`
+      )
+    }
+
+    // Delete all inboxes from database
+    await prisma.inbox.deleteMany({ where: { serverId: server.id } })
+    console.log(`    ✅ Deleted ${allInboxes.length} inbox record(s) from database`)
+  } else {
+    console.log(`    ℹ️  No inboxes found for server ${server.id}`)
   }
 
+  // Step 2: Delete all domains from MailCow, Cloudflare, and database
+  console.log(`🌐 Step 2: Deleting all domains for server ${server.id}`)
   const domains = await prisma.domain.findMany({
     where: { serverId: server.id },
   })
 
-  for (const domain of domains) {
-    try {
-      await deleteInboxesForDomain(domain.domainName, server.id, server.ipAddress, server.apiKey)
+  if (domains.length > 0) {
+    for (const domain of domains) {
+      try {
+        // Delete from Cloudflare (if zone ID exists)
+        if (domain.cloudflareZoneId && CLOUDFLARE_TOKEN) {
+          await deleteDomainFromCloudflare(domain.domainName, domain.cloudflareZoneId)
+        } else {
+          console.log(`    ⚠️  No Cloudflare zone ID for ${domain.domainName}, skipping Cloudflare cleanup`)
+        }
 
-      if (domain.cloudflareZoneId && CLOUDFLARE_TOKEN) {
-        await deleteDomainFromCloudflare(domain.domainName, domain.cloudflareZoneId)
+        // Delete from MailCow
+        if (server.ipAddress && server.apiKey) {
+          await deleteDomainFromMailCow(domain.domainName, server.ipAddress, server.apiKey)
+        } else {
+          console.log(`    ⚠️  Missing MailCow credentials, skipping MailCow domain deletion for ${domain.domainName}`)
+        }
+
+        // Delete from database
+        await prisma.domain.delete({ where: { id: domain.id } })
+        console.log(`    ✅ Removed domain ${domain.domainName} for server ${server.id}`)
+      } catch (error: any) {
+        console.error(`    ❌ Failed to clean domain ${domain.domainName}:`, error?.message)
       }
-
-      if (server.ipAddress && server.apiKey) {
-        await deleteDomainFromMailCow(domain.domainName, server.ipAddress, server.apiKey)
-      }
-
-      await prisma.domain.delete({ where: { id: domain.id } })
-      console.log(`  ✅ Removed domain ${domain.domainName} for server ${server.id}`)
-    } catch (error: any) {
-      console.error(`  ❌ Failed to clean domain ${domain.domainName}:`, error?.message)
     }
+  } else {
+    console.log(`    ℹ️  No domains found for server ${server.id}`)
   }
 
+  // Final cleanup: ensure no orphaned records remain
   await prisma.inbox.deleteMany({ where: { serverId: server.id } })
   await prisma.domain.deleteMany({ where: { serverId: server.id } })
+
+  console.log(`✅ Cleanup completed for server ${server.id}`)
 }
 
 export async function cleanupSubscriptionResources(subscriptionId: string) {
