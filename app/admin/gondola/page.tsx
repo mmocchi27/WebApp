@@ -180,7 +180,7 @@ export default function AdminGondola() {
       const data = await response.json()
       const filteredServers: Server[] = (data.servers || []).filter((server: Server) => {
         const normalizedStatus = server.status?.toLowerCase()
-        return normalizedStatus === 'active' || normalizedStatus === 'pending'
+        return normalizedStatus === 'active' || normalizedStatus === 'pending' || normalizedStatus === 'suspended'
       })
 
       setServers(filteredServers)
@@ -727,7 +727,7 @@ export default function AdminGondola() {
                 </div>
               ) : servers.length === 0 ? (
                 <div className="py-12 text-center">
-                  <p className="text-gray-500">No active or pending servers found for {currentOrgId || 'your search'}.</p>
+                  <p className="text-gray-500">No active, pending, or suspended servers found for {currentOrgId || 'your search'}.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
