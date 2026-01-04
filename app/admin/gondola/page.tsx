@@ -122,6 +122,7 @@ export default function AdminGondola() {
   const [exportingInboxes, setExportingInboxes] = useState<"Instantly" | "Smartlead" | null>(null)
   const [checkingDomainStatus, setCheckingDomainStatus] = useState(false)
   const [checkingIPStatus, setCheckingIPStatus] = useState<string | null>(null)
+  const [clearingServer, setClearingServer] = useState<string | null>(null)
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -499,6 +500,45 @@ export default function AdminGondola() {
     }
   }
 
+  const handleClearServer = async (serverId: string, serverName: string | null) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to clear all domains and inboxes from server "${serverName || serverId}"?\n\nThis will:\n- Delete all domains from Cloudflare and MailCow\n- Delete all inboxes from MailCow\n- Remove all domain and inbox records from the database\n\nThis action cannot be undone.`
+    )
+
+    if (!confirmed) return
+
+    setClearingServer(serverId)
+    setTableError(null)
+
+    try {
+      const response = await fetch('/api/admin/clear-server', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ serverId }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        setTableError(errorData.error || 'Failed to clear server')
+        return
+      }
+
+      // Refresh servers to show updated state
+      if (currentOrgId) {
+        await fetchServers(currentOrgId)
+      }
+
+      setTableError(null)
+    } catch (error) {
+      console.error('Error clearing server:', error)
+      setTableError('Failed to clear server. Please try again.')
+    } finally {
+      setClearingServer(null)
+    }
+  }
+
   const handleExportInboxes = async (destination: "Instantly" | "Smartlead") => {
     if (typeof window === "undefined") return
     if (!subscriptionDetails?.server?.id) return
@@ -867,6 +907,15 @@ export default function AdminGondola() {
                                   className="mt-1 text-xs"
                                 >
                                   {checkingIPStatus === server.id ? 'Checking...' : 'Check IP Status'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => void handleClearServer(server.id, server.serverName)}
+                                  disabled={clearingServer === server.id}
+                                  className="mt-1 text-xs"
+                                >
+                                  {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
                                 </Button>
                                 {server.blacklists && server.blacklists.length > 0 && (
                                   <details className="mt-1">
