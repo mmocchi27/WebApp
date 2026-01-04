@@ -1,11 +1,9 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { GeistSans } from "geist/font/sans"
 import { ClerkProvider } from "@clerk/nextjs"
 import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
-
-const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "MailMountains - Professional Email Solutions",
@@ -30,7 +28,7 @@ export default function RootLayout({
       afterSignUpUrl="/servers"
     >
       <html lang="en" suppressHydrationWarning>
-        <body className={inter.className} suppressHydrationWarning>
+        <body className={GeistSans.className} suppressHydrationWarning>
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
             {children}
           </ThemeProvider>
