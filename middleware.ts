@@ -20,6 +20,7 @@ const blockedPatterns = [
   /^\/cgi-bin\//i,              // CGI probes
   /^\/\.env/i,                  // Environment file probes
   /^\/\.git/i,                  // Git directory probes
+  /^\/\.well-known\/.*\.php/i,  // PHP in well-known
   /^\/phpmyadmin/i,             // phpMyAdmin probes
   /^\/mysql/i,                  // MySQL probes
   /^\/administrator/i,          // Joomla admin
@@ -32,6 +33,17 @@ const blockedPatterns = [
   /^\/db\./i,                   // Database file probes
   /shell/i,                     // Shell scripts
   /eval-stdin/i,                // Code injection
+  // SEO spam bots
+  /casino/i,                    // Casino spam
+  /gambling/i,                  // Gambling spam
+  /poker/i,                     // Poker spam
+  /slot/i,                      // Slot machine spam
+  /gclub/i,                     // Thai gambling
+  /superslot/i,                 // Slot spam
+  /goldluck/i,                  // Gambling spam
+  /ufa-/i,                      // Thai gambling
+  /bet.*win/i,                  // Betting spam
+  /^\/[a-z]+\/www\./i,          // Spam pattern: /anything/www.domain
 ]
 
 function isBlockedPath(path: string): boolean {
