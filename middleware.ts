@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
+import { NextResponse } from "next/server"
 
 const isProtectedRoute = createRouteMatcher([
   "/servers(.*)",
@@ -8,8 +9,45 @@ const isProtectedRoute = createRouteMatcher([
   "/admin(.*)",
 ])
 
+// Block obvious bot/attack paths
+const blockedPatterns = [
+  /\.php$/i,                    // All .php files
+  /^\/wp-/i,                    // WordPress paths
+  /^\/wordpress/i,              // WordPress
+  /^\/admin\.php/i,             // Admin probes
+  /^\/install\.php/i,           // Install probes
+  /^\/vendor\//i,               // Vendor directory probes
+  /^\/cgi-bin\//i,              // CGI probes
+  /^\/\.env/i,                  // Environment file probes
+  /^\/\.git/i,                  // Git directory probes
+  /^\/phpmyadmin/i,             // phpMyAdmin probes
+  /^\/mysql/i,                  // MySQL probes
+  /^\/administrator/i,          // Joomla admin
+  /^\/joomla/i,                 // Joomla
+  /^\/drupal/i,                 // Drupal
+  /^\/magento/i,                // Magento
+  /^\/xmlrpc/i,                 // XML-RPC exploits
+  /^\/config\./i,               // Config file probes
+  /^\/backup/i,                 // Backup file probes
+  /^\/db\./i,                   // Database file probes
+  /shell/i,                     // Shell scripts
+  /eval-stdin/i,                // Code injection
+]
+
+function isBlockedPath(path: string): boolean {
+  return blockedPatterns.some(pattern => pattern.test(path))
+}
+
 export default clerkMiddleware(async (auth, req) => {
   const path = req.nextUrl.pathname
+
+  // Block malicious bot requests immediately
+  if (isBlockedPath(path)) {
+    // #region agent log
+    console.log(`[DEBUG-BOT] Blocked malicious path: ${path}`)
+    // #endregion
+    return new NextResponse(null, { status: 404 })
+  }
 
   // #region agent log
   console.log(`[DEBUG-A] Middleware entry: path=${path}, method=${req.method}`)
