@@ -15,11 +15,40 @@ interface Subscription {
   subscriptionId?: string | null
 }
 
+// Fetch with timeout and auto-retry
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  timeout = 5000,
+  onRetry?: (attempt: number) => void
+): Promise<Response> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(timeoutId)
+      return response
+    } catch (error: any) {
+      clearTimeout(timeoutId)
+      if (attempt === maxRetries) {
+        throw new Error('Request failed after multiple attempts. Please try again.')
+      }
+      if (onRetry) onRetry(attempt)
+      await new Promise(r => setTimeout(r, 500))
+    }
+  }
+  throw new Error('Request failed')
+}
+
 export default function Billing() {
   const { user } = useUser()
   const { organization } = useOrganization()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [retryStatus, setRetryStatus] = useState("")
   const [error, setError] = useState("")
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [subscriptionsError, setSubscriptionsError] = useState("")
@@ -39,31 +68,35 @@ export default function Billing() {
   const handleOpenPortal = async () => {
     setLoading(true)
     setError("")
+    setRetryStatus("")
 
     try {
-      const response = await fetch('/api/create-portal-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const response = await fetchWithRetry(
+        '/api/create-portal-session',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ returnUrl: `${window.location.origin}/billing` }),
         },
-        body: JSON.stringify({
-          returnUrl: `${window.location.origin}/billing`
-        }),
-      })
+        3,
+        5000,
+        (attempt) => setRetryStatus(`Taking longer than expected... Retry ${attempt}/3`)
+      )
 
       const data = await response.json()
 
       if (response.ok) {
-        // Redirect to Stripe Customer Portal
         window.location.href = data.url
       } else {
         setError(data.error || 'Failed to open billing portal')
         setLoading(false)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error opening portal:', error)
-      setError('Failed to open billing portal. Please try again.')
+      setError(error.message || 'Failed to open billing portal. Please try again.')
       setLoading(false)
+    } finally {
+      setRetryStatus("")
     }
   }
 
@@ -171,7 +204,7 @@ export default function Billing() {
                     {loading ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Opening Portal...
+                        {retryStatus || 'Opening Portal...'}
                       </>
                     ) : (
                       'Open Billing Portal'
@@ -282,4 +315,3 @@ export default function Billing() {
     </div>
   )
 }
-

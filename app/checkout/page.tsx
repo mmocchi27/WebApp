@@ -6,15 +6,45 @@ import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
+// Fetch with timeout and auto-retry
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  timeout = 5000,
+  onRetry?: (attempt: number) => void
+): Promise<Response> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(timeoutId)
+      return response
+    } catch (error: any) {
+      clearTimeout(timeoutId)
+      if (attempt === maxRetries) {
+        throw new Error('Request failed after multiple attempts. Please try again.')
+      }
+      if (onRetry) onRetry(attempt)
+      await new Promise(r => setTimeout(r, 500))
+    }
+  }
+  throw new Error('Request failed')
+}
+
 export default function CheckoutPage() {
   const router = useRouter()
   const [quantity, setQuantity] = useState(1)
   const [serverName, setServerName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingStatus, setLoadingStatus] = useState("")
   const [couponCode, setCouponCode] = useState("")
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
   const [couponError, setCouponError] = useState("")
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
+  const [couponRetryStatus, setCouponRetryStatus] = useState("")
   const [checkoutError, setCheckoutError] = useState("")
 
   const validateCoupon = async () => {
@@ -22,18 +52,23 @@ export default function CheckoutPage() {
 
     setIsValidatingCoupon(true)
     setCouponError("")
+    setCouponRetryStatus("")
 
     try {
-      const response = await fetch("/api/validate-coupon", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetchWithRetry(
+        "/api/validate-coupon",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            couponCode: couponCode.trim(),
+            amount: calculatePrice() * 100,
+          }),
         },
-        body: JSON.stringify({
-          couponCode: couponCode.trim(),
-          amount: calculatePrice() * 100, // Convert to cents
-        }),
-      })
+        3,
+        5000,
+        (attempt) => setCouponRetryStatus(`Retry ${attempt}/3...`)
+      )
 
       const data = await response.json()
 
@@ -44,11 +79,12 @@ export default function CheckoutPage() {
         setCouponError(data.error || "Invalid coupon code")
         setAppliedCoupon(null)
       }
-    } catch (error) {
-      setCouponError("Error validating coupon code")
+    } catch (error: any) {
+      setCouponError(error.message || "Error validating coupon code")
       setAppliedCoupon(null)
     } finally {
       setIsValidatingCoupon(false)
+      setCouponRetryStatus("")
     }
   }
 
@@ -59,7 +95,6 @@ export default function CheckoutPage() {
   }
 
   const handlePurchase = async () => {
-    // Validate server name is provided
     if (!serverName.trim()) {
       setCheckoutError("Please enter a server name before proceeding.")
       return
@@ -67,37 +102,42 @@ export default function CheckoutPage() {
 
     setIsLoading(true)
     setCheckoutError("")
+    setLoadingStatus("")
 
     try {
-      const response = await fetch("/api/create-checkout-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetchWithRetry(
+        "/api/create-checkout-session",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quantity: quantity,
+            serverName: serverName.trim(),
+            pricePerServer: 250,
+            totalPrice: calculateFinalPrice(),
+            inboxRange: getInboxRange(),
+            sendingVolume: calculateSendingVolume(),
+            couponCode: appliedCoupon ? couponCode.trim() : null,
+          }),
         },
-        body: JSON.stringify({
-          quantity: quantity,
-          serverName: serverName.trim(),
-          pricePerServer: 250,
-          totalPrice: calculateFinalPrice(),
-          inboxRange: getInboxRange(),
-          sendingVolume: calculateSendingVolume(),
-          couponCode: appliedCoupon ? couponCode.trim() : null,
-        }),
-      })
+        3,
+        5000,
+        (attempt) => setLoadingStatus(`Taking longer than expected... Retry ${attempt}/3`)
+      )
 
       const data = await response.json()
 
       if (response.ok && data.url) {
         window.location.href = data.url
       } else {
-        // Handle error response from API
         setCheckoutError(data.error || "There was an error processing your request. Please try again.")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating checkout session:", error)
-      setCheckoutError("There was an error processing your request. Please try again.")
+      setCheckoutError(error.message || "There was an error processing your request. Please try again.")
     } finally {
       setIsLoading(false)
+      setLoadingStatus("")
     }
   }
 
@@ -252,7 +292,7 @@ export default function CheckoutPage() {
                         onClick={validateCoupon}
                         disabled={!couponCode.trim() || isValidatingCoupon}
                       >
-                        {isValidatingCoupon ? "..." : "Apply"}
+                        {isValidatingCoupon ? (couponRetryStatus || "...") : "Apply"}
                       </Button>
                     </div>
                     {couponError && <p className="text-sm text-red-600">{couponError}</p>}
@@ -272,7 +312,7 @@ export default function CheckoutPage() {
                 onClick={handlePurchase}
                 disabled={isLoading}
               >
-                {isLoading ? "Processing..." : "Purchase"}
+                {isLoading ? (loadingStatus || "Processing...") : "Purchase"}
               </Button>
             </CardContent>
           </Card>
