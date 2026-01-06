@@ -1,62 +1,53 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
 
+// ONLY match your actual protected routes (not random paths with similar names)
 const isProtectedRoute = createRouteMatcher([
-  "/servers(.*)",
-  "/checkout(.*)",
-  "/user-management(.*)",
-  "/billing(.*)",
-  "/admin(.*)",
+  "/servers",
+  "/servers/(.*)",
+  "/checkout",
+  "/checkout/(.*)",
+  "/user-management",
+  "/user-management/(.*)",
+  "/billing",
+  "/billing/(.*)",
+  "/admin/gondola",
+  "/admin/gondola/(.*)",
+  "/domains",
+  "/domains/(.*)",
+  "/inboxes",
+  "/inboxes/(.*)",
 ])
 
-// Block obvious bot/attack paths
-const blockedPatterns = [
-  /\.php$/i,                    // All .php files
-  /^\/wp-/i,                    // WordPress paths
-  /^\/wordpress/i,              // WordPress
-  /^\/admin\.php/i,             // Admin probes
-  /^\/install\.php/i,           // Install probes
-  /^\/vendor\//i,               // Vendor directory probes
-  /^\/cgi-bin\//i,              // CGI probes
-  /^\/\.env/i,                  // Environment file probes
-  /^\/\.git/i,                  // Git directory probes
-  /^\/\.well-known\/.*\.php/i,  // PHP in well-known
-  /^\/phpmyadmin/i,             // phpMyAdmin probes
-  /^\/mysql/i,                  // MySQL probes
-  /^\/administrator/i,          // Joomla admin
-  /^\/joomla/i,                 // Joomla
-  /^\/drupal/i,                 // Drupal
-  /^\/magento/i,                // Magento
-  /^\/xmlrpc/i,                 // XML-RPC exploits
-  /^\/config\./i,               // Config file probes
-  /^\/backup/i,                 // Backup file probes
-  /^\/db\./i,                   // Database file probes
-  /shell/i,                     // Shell scripts
-  /eval-stdin/i,                // Code injection
-  // SEO spam bots
-  /casino/i,                    // Casino spam
-  /gambling/i,                  // Gambling spam
-  /poker/i,                     // Poker spam
-  /slot/i,                      // Slot machine spam
-  /gclub/i,                     // Thai gambling
-  /superslot/i,                 // Slot spam
-  /goldluck/i,                  // Gambling spam
-  /ufa-/i,                      // Thai gambling
-  /bet.*win/i,                  // Betting spam
-  /^\/[a-z]+\/www\./i,          // Spam pattern: /anything/www.domain
+// Valid paths in your app - everything else gets 404
+const validPathPatterns = [
+  /^\/$/,                       // Homepage
+  /^\/servers/,                 // Servers page
+  /^\/checkout/,                // Checkout page
+  /^\/billing/,                 // Billing page
+  /^\/domains/,                 // Domains page
+  /^\/inboxes/,                 // Inboxes page
+  /^\/user-management/,         // User management
+  /^\/admin\/gondola/,          // Admin gondola (your actual admin)
+  /^\/sign-in/,                 // Sign in
+  /^\/sign-up/,                 // Sign up
+  /^\/api\//,                   // API routes
+  /^\/robots\.txt$/,            // Robots.txt
+  /^\/favicon\.ico$/,           // Favicon
+  /^\/icon\.svg$/,              // Icon
 ]
 
-function isBlockedPath(path: string): boolean {
-  return blockedPatterns.some(pattern => pattern.test(path))
+function isValidPath(path: string): boolean {
+  return validPathPatterns.some(pattern => pattern.test(path))
 }
 
 export default clerkMiddleware(async (auth, req) => {
   const path = req.nextUrl.pathname
 
-  // Block malicious bot requests immediately
-  if (isBlockedPath(path)) {
+  // FIRST: Block any path that's not in our app (stops bots immediately)
+  if (!isValidPath(path)) {
     // #region agent log
-    console.log(`[DEBUG-BOT] Blocked malicious path: ${path}`)
+    console.log(`[DEBUG-BOT] Blocked unknown path: ${path}`)
     // #endregion
     return new NextResponse(null, { status: 404 })
   }
