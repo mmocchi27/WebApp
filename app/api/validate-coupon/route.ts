@@ -9,12 +9,25 @@ function getStripe() {
 }
 
 export async function POST(request: NextRequest) {
+  // #region agent log
+  console.log(`[DEBUG-C] Handler entry: hasStripeKey=${!!process.env.STRIPE_SECRET_KEY}, hasClerkKey=${!!process.env.CLERK_SECRET_KEY}`)
+  // #endregion
+
   console.log("[coupon] Handler called")
   try {
     const stripe = getStripe()
     console.log("[coupon] Stripe client created")
+
+    // #region agent log
+    console.log('[DEBUG-B] Before auth()')
+    // #endregion
     
     const { userId } = await auth()
+
+    // #region agent log
+    console.log(`[DEBUG-B] After auth(): hasUserId=${!!userId}`)
+    // #endregion
+
     console.log("[coupon] Auth complete:", !!userId)
     
     if (!userId) {
@@ -71,6 +84,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // #region agent log
+    console.log(`[DEBUG-B] Handler success: couponId=${coupon.id}`)
+    // #endregion
+
     return NextResponse.json({
       valid: true,
       coupon: {
@@ -81,7 +98,10 @@ export async function POST(request: NextRequest) {
         name: coupon.name,
       },
     })
-  } catch (error) {
+  } catch (error: any) {
+    // #region agent log
+    console.log(`[DEBUG-B] Handler error: ${error?.message||String(error)}`)
+    // #endregion
     console.error("[coupon] Error:", error)
     return NextResponse.json({
       valid: false,

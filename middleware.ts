@@ -11,18 +11,42 @@ const isProtectedRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, req) => {
   const path = req.nextUrl.pathname
 
+  // #region agent log
+  console.log(`[DEBUG-A] Middleware entry: path=${path}, method=${req.method}`)
+  // #endregion
+
   // Allow Stripe webhooks (and sign-in/up) to bypass Clerk auth
   if (
     path.startsWith("/api/webhooks/stripe") ||
     path.startsWith("/sign-in") ||
     path.startsWith("/sign-up")
   ) {
+    // #region agent log
+    console.log(`[DEBUG-A] Bypassing auth for path=${path}`)
+    // #endregion
     return
   }
 
   if (isProtectedRoute(req)) {
-    await auth.protect()
+    // #region agent log
+    console.log(`[DEBUG-A] Protected route - calling auth.protect() for path=${path}`)
+    // #endregion
+    try {
+      await auth.protect()
+      // #region agent log
+      console.log(`[DEBUG-A] auth.protect() SUCCESS for path=${path}`)
+      // #endregion
+    } catch (err: any) {
+      // #region agent log
+      console.log(`[DEBUG-A] auth.protect() FAILED for path=${path}, error=${err?.message||String(err)}`)
+      // #endregion
+      throw err
+    }
   }
+
+  // #region agent log
+  console.log(`[DEBUG-A] Middleware complete for path=${path}`)
+  // #endregion
 })
 
 export const config = {

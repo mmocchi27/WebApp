@@ -9,12 +9,25 @@ function getStripe() {
 }
 
 export async function POST(req: NextRequest) {
+  // #region agent log
+  console.log(`[DEBUG-C] Handler entry: hasStripeKey=${!!process.env.STRIPE_SECRET_KEY}, hasClerkKey=${!!process.env.CLERK_SECRET_KEY}`)
+  // #endregion
+  
   console.log('[portal] Handler called')
   try {
     const stripe = getStripe()
     console.log('[portal] Stripe client created')
+
+    // #region agent log
+    console.log('[DEBUG-B] Before auth()')
+    // #endregion
     
     const { userId, orgId } = await auth()
+
+    // #region agent log
+    console.log(`[DEBUG-B] After auth(): hasUserId=${!!userId}, hasOrgId=${!!orgId}`)
+    // #endregion
+    
     console.log('[portal] Auth complete:', { userId: !!userId, orgId: !!orgId })
     
     if (!userId) {
@@ -55,9 +68,16 @@ export async function POST(req: NextRequest) {
       return_url: returnUrl || `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
     })
 
+    // #region agent log
+    console.log(`[DEBUG-B] Handler success: sessionId=${session.id}`)
+    // #endregion
+
     console.log('[portal] Session created:', session.id)
     return NextResponse.json({ url: session.url })
   } catch (error: any) {
+    // #region agent log
+    console.log(`[DEBUG-B] Handler error: ${error?.message||String(error)}`)
+    // #endregion
     console.error('[portal] Error:', error)
     return NextResponse.json(
       { error: error.message || 'Failed to create portal session' },
