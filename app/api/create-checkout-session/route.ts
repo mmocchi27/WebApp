@@ -2,18 +2,25 @@ import { type NextRequest, NextResponse } from "next/server"
 import { auth, clerkClient } from "@clerk/nextjs/server"
 import Stripe from "stripe"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-07-30.basil",
-})
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2025-07-30.basil",
+  })
+}
 
 export async function POST(request: NextRequest) {
+  console.log("[checkout] Handler called")
   try {
+    const stripe = getStripe()
+    console.log("[checkout] Stripe client created")
+    
     const { userId, orgId } = await auth()
+    console.log("[checkout] Auth complete:", { userId: !!userId, orgId: !!orgId })
+    
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user's organization
     let organizationId = orgId
     
     if (!organizationId) {
@@ -24,7 +31,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // User must have an organization to create subscriptions
     if (!organizationId) {
       return NextResponse.json({ 
         error: "You must be part of an organization to create a subscription. Please refresh the page." 
@@ -33,7 +39,6 @@ export async function POST(request: NextRequest) {
 
     const { quantity, serverName, pricePerServer, totalPrice, inboxRange, sendingVolume, couponCode } = await request.json()
 
-    // Validate server name
     if (!serverName || !serverName.trim()) {
       return NextResponse.json({ 
         error: "Server name is required." 
@@ -42,17 +47,16 @@ export async function POST(request: NextRequest) {
 
     const normalizedServerName = serverName.trim()
 
-    // Enforce 1 server limit per checkout
     if (quantity > 1) {
       return NextResponse.json({ 
         error: "You can only order 1 server at a time. Please complete your order for 1 server first, then place another order if you need additional servers." 
       }, { status: 400 })
     }
 
-    // Find or create a Stripe customer for this organization
+    console.log("[checkout] Finding/creating customer for org:", organizationId)
+
     let customerId: string
     
-    // First, try to find an existing customer by org ID
     const existingCustomers = await stripe.customers.list({
       limit: 100,
     })
@@ -61,18 +65,16 @@ export async function POST(request: NextRequest) {
       c.metadata.clerkOrgId === organizationId
     )
     
-    // If no org-based customer found, check for legacy user-based customer and migrate it
     if (!existingCustomer) {
       existingCustomer = existingCustomers.data.find(c => 
         c.metadata.clerkUserId === userId
       )
       
-      // If found legacy customer, update it with org ID
       if (existingCustomer) {
         await stripe.customers.update(existingCustomer.id, {
           metadata: {
-            clerkUserId: userId, // Keep for backwards compatibility
-            clerkOrgId: organizationId, // Add org ID
+            clerkUserId: userId,
+            clerkOrgId: organizationId,
           },
         })
         customerId = existingCustomer.id
@@ -82,7 +84,6 @@ export async function POST(request: NextRequest) {
     if (existingCustomer) {
       customerId = existingCustomer.id
     } else {
-      // Create a new customer with both user and org IDs
       const customer = await stripe.customers.create({
         metadata: {
           clerkUserId: userId,
@@ -92,10 +93,10 @@ export async function POST(request: NextRequest) {
       customerId = customer.id
     }
 
+    console.log("[checkout] Customer ID:", customerId)
+
     const origin = request.headers.get("origin")
     const baseUrl = origin || `https://${request.headers.get("host")}`
-
-    // Ensure the URL has a proper scheme
     const normalizedBaseUrl = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`
 
     const sessionConfig: any = {
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
               name: `MailMountains Server${quantity > 1 ? "s" : ""}`,
               description: `${inboxRange} inboxes, ${sendingVolume}k emails/month`,
             },
-            unit_amount: pricePerServer * 100, // Stripe expects cents
+            unit_amount: pricePerServer * 100,
             recurring: {
               interval: "month",
             },
@@ -139,7 +140,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (couponCode) {
-      // Find the promotion code to get the coupon ID
       const promotionCodes = await stripe.promotionCodes.list({
         code: couponCode,
         active: true,
@@ -155,11 +155,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log("[checkout] Creating session...")
     const session = await stripe.checkout.sessions.create(sessionConfig)
 
+    console.log("[checkout] Session created:", session.id)
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error("Error creating checkout session:", error)
+    console.error("[checkout] Error:", error)
     return NextResponse.json({ error: "Error creating checkout session" }, { status: 500 })
   }
 }
