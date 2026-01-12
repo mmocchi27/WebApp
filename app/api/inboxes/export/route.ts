@@ -1,7 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 import { decryptSecret } from "@/lib/encryption"
+
+// #region agent log
+async function isAdmin(userId: string): Promise<boolean> {
+  try {
+    const client = await clerkClient()
+    const user = await client.users.getUser(userId)
+    const userEmail = user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress
+    const adminEmail = process.env.ADMIN_EMAIL || 'mitch@mailmountains.com'
+    console.log(`[DEBUG-EXPORT-ADMIN] Checking admin: userEmail=${userEmail}, adminEmail=${adminEmail}, isAdmin=${userEmail === adminEmail}`);
+    return userEmail === adminEmail
+  } catch (error) {
+    console.error('Error checking admin status:', error)
+    return false
+  }
+}
+// #endregion
 
 type ExportDestination = "Instantly" | "Smartlead"
 
@@ -78,10 +94,13 @@ export async function POST(request: NextRequest) {
       server = await prisma.server.findFirst({ where: { subscriptionId: serverId } })
     }
 
-    if (!server || server.organizationId !== orgId) {
-      // #region agent log
-      console.log(`[DEBUG-EXPORT-D] Server not found or org mismatch: serverFound=${!!server}, serverOrgId=${server?.organizationId||'null'}, requestOrgId=${orgId||'null'}`);
-      // #endregion
+    // #region agent log
+    const userIsAdmin = await isAdmin(userId)
+    console.log(`[DEBUG-EXPORT-D] Server check: serverFound=${!!server}, serverOrgId=${server?.organizationId||'null'}, requestOrgId=${orgId||'null'}, userIsAdmin=${userIsAdmin}`);
+    // #endregion
+    
+    // Allow access if: server exists AND (org matches OR user is admin)
+    if (!server || (server.organizationId !== orgId && !userIsAdmin)) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
     }
 
