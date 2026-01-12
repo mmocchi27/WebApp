@@ -44,10 +44,19 @@ function isValidPath(path: string): boolean {
 export default clerkMiddleware(async (auth, req) => {
   const path = req.nextUrl.pathname
 
+  // #region agent log
+  if (path.includes('/api/inboxes/export')) {
+    console.log(`[DEBUG-EXPORT-A] Middleware hit: path=${path}, method=${req.method}, isValid=${isValidPath(path)}`);
+  }
+  // #endregion
+
   // FIRST: Block any path that's not in our app (stops bots immediately)
   if (!isValidPath(path)) {
     // #region agent log
     console.log(`[DEBUG-BOT] Blocked unknown path: ${path}`)
+    if (path.includes('inboxes')) {
+      console.log(`[DEBUG-EXPORT-A] BLOCKED invalid path containing inboxes: ${path}`);
+    }
     // #endregion
     return new NextResponse(null, { status: 404 })
   }

@@ -44,14 +44,23 @@ function generateSmartleadCsv(inboxes: ExportRow[]) {
 }
 
 export async function POST(request: NextRequest) {
+  // #region agent log
+  console.log(`[DEBUG-EXPORT-C] POST handler ENTRY: url=${request.url}, method=${request.method}`);
+  // #endregion
   try {
     const { userId, orgId } = await auth()
+    // #region agent log
+    console.log(`[DEBUG-EXPORT-B] Auth result: userId=${userId||'null'}, orgId=${orgId||'null'}`);
+    // #endregion
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = (await request.json()) as ExportRequestBody
     const { serverId, destination } = body
+    // #region agent log
+    console.log(`[DEBUG-EXPORT-E] Request body: serverId=${serverId}, destination=${destination}`);
+    // #endregion
 
     if (!serverId || !destination) {
       return NextResponse.json(
@@ -70,6 +79,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (!server || server.organizationId !== orgId) {
+      // #region agent log
+      console.log(`[DEBUG-EXPORT-D] Server not found or org mismatch: serverFound=${!!server}, serverOrgId=${server?.organizationId||'null'}, requestOrgId=${orgId||'null'}`);
+      // #endregion
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
     }
 
