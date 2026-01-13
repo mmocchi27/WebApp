@@ -123,6 +123,7 @@ export default function AdminGondola() {
   const [checkingDomainStatus, setCheckingDomainStatus] = useState(false)
   const [checkingIPStatus, setCheckingIPStatus] = useState<string | null>(null)
   const [clearingServer, setClearingServer] = useState<string | null>(null)
+  const [resettingDns, setResettingDns] = useState(false)
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -355,6 +356,7 @@ export default function AdminGondola() {
     setExpandedDomainId(null)
     setExportingNameservers(false)
     setExportingInboxes(null)
+    setResettingDns(false)
     fetchSubscriptionDetails(subscriptionId)
   }
 
@@ -465,6 +467,61 @@ export default function AdminGondola() {
       setDetailsNotice({ type: "error", text: "Failed to check domain status. Please try again." })
     } finally {
       setCheckingDomainStatus(false)
+    }
+  }
+
+  const handleResetDns = async () => {
+    if (!subscriptionDetails?.server?.id || subscriptionDetails.domains.length === 0) return
+
+    const confirmed = window.confirm(
+      `Are you sure you want to reset DNS for all ${subscriptionDetails.domains.length} domain(s)?\n\nThis will:\n- Delete ALL existing DNS records from Cloudflare\n- Recreate all standard DNS records (A, MX, SPF, DMARC, DKIM)\n- Update the database with new record values\n\nThis action cannot be undone.`
+    )
+
+    if (!confirmed) return
+
+    setResettingDns(true)
+    setDetailsNotice(null)
+
+    try {
+      const response = await fetch('/api/admin/reset-dns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serverId: subscriptionDetails.server.id,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setDetailsNotice({ 
+          type: "error", 
+          text: data.error || data.message || "Failed to reset DNS" 
+        })
+        return
+      }
+
+      // Refresh subscription details to show updated DNS status
+      await fetchSubscriptionDetails(subscriptionDetails.server.subscriptionId)
+
+      if (data.failed > 0) {
+        setDetailsNotice({ 
+          type: "error", 
+          text: `DNS reset completed with errors: ${data.successful}/${data.total} domains successful` 
+        })
+      } else {
+        setDetailsNotice({ 
+          type: "success", 
+          text: `DNS reset completed successfully for ${data.successful} domain(s)` 
+        })
+      }
+    } catch (error) {
+      console.error("Error resetting DNS:", error)
+      setDetailsNotice({ type: "error", text: "Failed to reset DNS. Please try again." })
+    } finally {
+      setResettingDns(false)
     }
   }
 
@@ -635,7 +692,7 @@ export default function AdminGondola() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
@@ -1029,7 +1086,7 @@ export default function AdminGondola() {
                       variant="outline"
                       onClick={handleCheckDomainStatus}
                       disabled={
-                        checkingDomainStatus || subscriptionDetails.domains.length === 0
+                        checkingDomainStatus || subscriptionDetails.domains.length === 0 || resettingDns
                       }
                     >
                       {checkingDomainStatus ? "Checking..." : "Check Status"}
@@ -1037,9 +1094,19 @@ export default function AdminGondola() {
                     <Button
                       size="sm"
                       variant="outline"
+                      onClick={handleResetDns}
+                      disabled={
+                        resettingDns || subscriptionDetails.domains.length === 0 || checkingDomainStatus
+                      }
+                    >
+                      {resettingDns ? "Resetting..." : "Reset DNS"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={handleExportNameservers}
                       disabled={
-                        exportingNameservers || subscriptionDetails.domains.length === 0 || checkingDomainStatus
+                        exportingNameservers || subscriptionDetails.domains.length === 0 || checkingDomainStatus || resettingDns
                       }
                     >
                       {exportingNameservers ? "Exporting..." : "Export Nameservers"}
