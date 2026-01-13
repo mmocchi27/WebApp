@@ -3,21 +3,18 @@ import { auth, clerkClient } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 import { decryptSecret } from "@/lib/encryption"
 
-// #region agent log
 async function isAdmin(userId: string): Promise<boolean> {
   try {
     const client = await clerkClient()
     const user = await client.users.getUser(userId)
     const userEmail = user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress
     const adminEmail = process.env.ADMIN_EMAIL || 'mitch@mailmountains.com'
-    console.log(`[DEBUG-EXPORT-ADMIN] Checking admin: userEmail=${userEmail}, adminEmail=${adminEmail}, isAdmin=${userEmail === adminEmail}`);
     return userEmail === adminEmail
   } catch (error) {
     console.error('Error checking admin status:', error)
     return false
   }
 }
-// #endregion
 
 type ExportDestination = "Instantly" | "Smartlead"
 
@@ -60,23 +57,14 @@ function generateSmartleadCsv(inboxes: ExportRow[]) {
 }
 
 export async function POST(request: NextRequest) {
-  // #region agent log
-  console.log(`[DEBUG-EXPORT-C] POST handler ENTRY: url=${request.url}, method=${request.method}`);
-  // #endregion
   try {
     const { userId, orgId } = await auth()
-    // #region agent log
-    console.log(`[DEBUG-EXPORT-B] Auth result: userId=${userId||'null'}, orgId=${orgId||'null'}`);
-    // #endregion
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = (await request.json()) as ExportRequestBody
     const { serverId, destination } = body
-    // #region agent log
-    console.log(`[DEBUG-EXPORT-E] Request body: serverId=${serverId}, destination=${destination}`);
-    // #endregion
 
     if (!serverId || !destination) {
       return NextResponse.json(
@@ -94,10 +82,7 @@ export async function POST(request: NextRequest) {
       server = await prisma.server.findFirst({ where: { subscriptionId: serverId } })
     }
 
-    // #region agent log
     const userIsAdmin = await isAdmin(userId)
-    console.log(`[DEBUG-EXPORT-D] Server check: serverFound=${!!server}, serverOrgId=${server?.organizationId||'null'}, requestOrgId=${orgId||'null'}, userIsAdmin=${userIsAdmin}`);
-    // #endregion
     
     // Allow access if: server exists AND (org matches OR user is admin)
     if (!server || (server.organizationId !== orgId && !userIsAdmin)) {
