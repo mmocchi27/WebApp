@@ -243,6 +243,138 @@ async function resetDnsForDomain(domain: string, zoneId: string, serverId: strin
   }
 }
 
+async function configureMasterDomainRedirect(
+  domainName: string,
+  zoneId: string,
+  masterDomain: string
+) {
+  console.log(`🌐 Setting up master domain redirect for ${domainName} → ${masterDomain}`)
+
+  // Step 1: Delete old Redirect Rules
+  console.log(`  🗑️ Clearing old Redirect Rules...`)
+  try {
+    const rulesetsResponse = await axios.get(
+      `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rulesets`,
+      {
+        headers: {
+          'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+
+    if (rulesetsResponse.data?.success && Array.isArray(rulesetsResponse.data.result)) {
+      for (const ruleset of rulesetsResponse.data.result) {
+        if (ruleset.phase === 'http_request_dynamic_redirect' && ruleset.id) {
+          try {
+            await axios.delete(
+              `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rulesets/${ruleset.id}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            )
+            console.log(`    ✅ Deleted redirect ruleset ${ruleset.id}`)
+          } catch (e: any) {
+            console.warn(`    ⚠️ Failed to delete ruleset ${ruleset.id}:`, e?.message)
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn(`  ⚠️ Could not clear redirect rules:`, e?.message)
+  }
+
+  // Step 2: Delete old Page Rules
+  console.log(`  🗑️ Clearing old Page Rules...`)
+  try {
+    const listResponse = await axios.get(
+      `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules`,
+      {
+        headers: {
+          'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+
+    if (listResponse.data?.success && Array.isArray(listResponse.data.result)) {
+      for (const rule of listResponse.data.result) {
+        if (!rule.id) continue
+        try {
+          await axios.delete(
+            `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules/${rule.id}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          )
+          console.log(`    ✅ Deleted page rule ${rule.id}`)
+        } catch (e: any) {
+          console.warn(`    ⚠️ Failed to delete page rule ${rule.id}:`, e?.message)
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn(`  ⚠️ Could not clear page rules:`, e?.message)
+  }
+
+  // Step 3: Create new page rules for redirect
+  const rules = [
+    { source: `${domainName}/*`, priority: 1 },
+    { source: `www.${domainName}/*`, priority: 2 }
+  ]
+
+  for (const rule of rules) {
+    const payload = {
+      targets: [
+        {
+          target: 'url',
+          constraint: {
+            operator: 'matches',
+            value: rule.source
+          }
+        }
+      ],
+      actions: [
+        {
+          id: 'forwarding_url',
+          value: {
+            url: `https://${masterDomain}/$1`,
+            status_code: 301
+          }
+        }
+      ],
+      priority: rule.priority,
+      status: 'active'
+    }
+
+    const createResponse = await axios.post(
+      `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules`,
+      payload,
+      {
+        headers: {
+          'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+
+    if (!createResponse.data?.success) {
+      throw new Error(
+        createResponse.data?.errors?.[0]?.message ||
+        `Cloudflare returned an error while creating redirect rule`
+      )
+    }
+  }
+
+  console.log(`✅ Master domain redirect configured for ${domainName}`)
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth()
@@ -261,7 +393,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    const { serverId, domainIds } = await request.json()
+    const { serverId, domainIds, masterDomain } = await request.json()
 
     if (!serverId) {
       return NextResponse.json({ error: "Server ID is required" }, { status: 400 })
@@ -320,9 +452,42 @@ export async function POST(request: NextRequest) {
           domain.cloudflareZoneId,
           server.id
         )
+
+        // If master domain is provided, set up redirect
+        let redirectConfigured = false
+        if (masterDomain && masterDomain.trim()) {
+          try {
+            await configureMasterDomainRedirect(
+              domain.domainName,
+              domain.cloudflareZoneId,
+              masterDomain.trim()
+            )
+            
+            // Update database with master domain info
+            await prisma.domain.update({
+              where: {
+                domainName_serverId: {
+                  domainName: domain.domainName,
+                  serverId: server.id
+                }
+              },
+              data: {
+                masterDomain: masterDomain.trim(),
+                redirectConfigured: true,
+                updatedAt: new Date()
+              }
+            })
+            redirectConfigured = true
+            console.log(`✅ Master domain redirect configured for ${domain.domainName}`)
+          } catch (redirectError: any) {
+            console.error(`⚠️ Failed to configure redirect for ${domain.domainName}:`, redirectError.message)
+          }
+        }
+
         results.push({
           ...result,
-          success: true
+          success: true,
+          redirectConfigured
         })
       } catch (error: any) {
         console.error(`❌ Failed to reset DNS for ${domain.domainName}:`, error.message)
@@ -335,9 +500,13 @@ export async function POST(request: NextRequest) {
     }
 
     const successCount = results.filter(r => r.success).length
+    const redirectCount = results.filter((r: any) => r.redirectConfigured).length
 
     console.log(`\n${'='.repeat(60)}`)
     console.log(`DNS RESET COMPLETE: ${successCount}/${domains.length} domains successful`)
+    if (masterDomain) {
+      console.log(`REDIRECTS CONFIGURED: ${redirectCount}/${successCount} domains`)
+    }
     console.log('='.repeat(60))
 
     return NextResponse.json({

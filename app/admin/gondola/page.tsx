@@ -125,6 +125,8 @@ export default function AdminGondola() {
   const [clearingServer, setClearingServer] = useState<string | null>(null)
   const [resettingDns, setResettingDns] = useState(false)
   const [resettingSingleDomain, setResettingSingleDomain] = useState<string | null>(null)
+  const [selectedDomainIds, setSelectedDomainIds] = useState<Set<string>>(new Set())
+  const [resetMasterDomain, setResetMasterDomain] = useState("")
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -324,6 +326,8 @@ export default function AdminGondola() {
     setExpandedDomainId(null)
     setExportingNameservers(false)
     setExportingInboxes(null)
+    setSelectedDomainIds(new Set())
+    setResetMasterDomain("")
   }
 
   const fetchSubscriptionDetails = async (subscriptionId: string) => {
@@ -358,6 +362,8 @@ export default function AdminGondola() {
     setExportingNameservers(false)
     setExportingInboxes(null)
     setResettingDns(false)
+    setSelectedDomainIds(new Set())
+    setResetMasterDomain("")
     fetchSubscriptionDetails(subscriptionId)
   }
 
@@ -471,11 +477,40 @@ export default function AdminGondola() {
     }
   }
 
+  const handleToggleDomainSelection = (domainId: string) => {
+    setSelectedDomainIds(prev => {
+      const next = new Set(prev)
+      if (next.has(domainId)) {
+        next.delete(domainId)
+      } else {
+        next.add(domainId)
+      }
+      return next
+    })
+  }
+
+  const handleSelectAllDomains = () => {
+    if (!subscriptionDetails) return
+    if (selectedDomainIds.size === subscriptionDetails.domains.length) {
+      setSelectedDomainIds(new Set())
+    } else {
+      setSelectedDomainIds(new Set(subscriptionDetails.domains.map(d => d.id)))
+    }
+  }
+
   const handleResetDns = async () => {
     if (!subscriptionDetails?.server?.id || subscriptionDetails.domains.length === 0) return
 
+    const domainsToReset = selectedDomainIds.size > 0 
+      ? subscriptionDetails.domains.filter(d => selectedDomainIds.has(d.id))
+      : subscriptionDetails.domains
+
+    const masterDomainInfo = resetMasterDomain.trim() 
+      ? `\n- Set up redirect to: ${resetMasterDomain.trim()}` 
+      : ''
+
     const confirmed = window.confirm(
-      `Are you sure you want to reset DNS for all ${subscriptionDetails.domains.length} domain(s)?\n\nThis will:\n- Delete ALL existing DNS records from Cloudflare\n- Recreate all standard DNS records (A, MX, SPF, DMARC, DKIM)\n- Update the database with new record values\n\nThis action cannot be undone.`
+      `Are you sure you want to reset DNS for ${domainsToReset.length} domain(s)?${masterDomainInfo}\n\nThis will:\n- Delete ALL existing DNS records from Cloudflare\n- Recreate all standard DNS records (A, MX, SPF, DMARC, DKIM)\n- Update the database with new record values\n\nThis action cannot be undone.`
     )
 
     if (!confirmed) return
@@ -491,6 +526,8 @@ export default function AdminGondola() {
         },
         body: JSON.stringify({
           serverId: subscriptionDetails.server.id,
+          domainIds: selectedDomainIds.size > 0 ? Array.from(selectedDomainIds) : undefined,
+          masterDomain: resetMasterDomain.trim() || undefined,
         }),
       })
 
@@ -1090,7 +1127,7 @@ export default function AdminGondola() {
       </div>
 
       <Dialog open={detailsDialogOpen} onOpenChange={handleDetailsDialogChange}>
-        <DialogContent className="sm:max-w-7xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[95vw] lg:max-w-[90vw] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Subscription {selectedSubscriptionId || ""}</DialogTitle>
             <DialogDescription>
@@ -1134,21 +1171,55 @@ export default function AdminGondola() {
               )}
 
               <div>
-                <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    Domains ({subscriptionDetails.domains.length})
-                  </h3>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleCheckDomainStatus}
-                      disabled={
-                        checkingDomainStatus || subscriptionDetails.domains.length === 0 || resettingDns
-                      }
-                    >
-                      {checkingDomainStatus ? "Checking..." : "Check Status"}
-                    </Button>
+                <div className="mb-4 flex flex-col gap-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Domains ({subscriptionDetails.domains.length})
+                      {selectedDomainIds.size > 0 && (
+                        <span className="ml-2 text-blue-600">
+                          ({selectedDomainIds.size} selected)
+                        </span>
+                      )}
+                    </h3>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCheckDomainStatus}
+                        disabled={
+                          checkingDomainStatus || subscriptionDetails.domains.length === 0 || resettingDns
+                        }
+                      >
+                        {checkingDomainStatus ? "Checking..." : "Check Status"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleExportNameservers}
+                        disabled={
+                          exportingNameservers || subscriptionDetails.domains.length === 0 || checkingDomainStatus || resettingDns
+                        }
+                      >
+                        {exportingNameservers ? "Exporting..." : "Export Nameservers"}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Reset DNS Controls */}
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end p-3 bg-gray-50 rounded-md border">
+                    <div className="flex-1">
+                      <Label htmlFor="masterDomain" className="text-xs text-gray-600">
+                        Master Domain for Redirect (optional)
+                      </Label>
+                      <Input
+                        id="masterDomain"
+                        placeholder="e.g., example.com"
+                        value={resetMasterDomain}
+                        onChange={(e) => setResetMasterDomain(e.target.value)}
+                        className="mt-1"
+                        disabled={resettingDns}
+                      />
+                    </div>
                     <Button
                       size="sm"
                       variant="outline"
@@ -1157,27 +1228,30 @@ export default function AdminGondola() {
                         resettingDns || subscriptionDetails.domains.length === 0 || checkingDomainStatus
                       }
                     >
-                      {resettingDns ? "Resetting..." : "Reset DNS"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleExportNameservers}
-                      disabled={
-                        exportingNameservers || subscriptionDetails.domains.length === 0 || checkingDomainStatus || resettingDns
+                      {resettingDns 
+                        ? "Resetting..." 
+                        : selectedDomainIds.size > 0 
+                          ? `Reset DNS (${selectedDomainIds.size})` 
+                          : "Reset All DNS"
                       }
-                    >
-                      {exportingNameservers ? "Exporting..." : "Export Nameservers"}
                     </Button>
                   </div>
                 </div>
                 {subscriptionDetails.domains.length === 0 ? (
                   <p className="text-sm text-gray-500">No domains linked to this subscription.</p>
                 ) : (
-                  <div className="max-h-64 overflow-y-auto border rounded-md">
+                  <div className="max-h-80 overflow-y-auto border rounded-md">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gray-50 sticky top-0">
                         <tr>
+                          <th className="px-3 py-2 text-center w-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedDomainIds.size === subscriptionDetails.domains.length && subscriptionDetails.domains.length > 0}
+                              onChange={handleSelectAllDomains}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                          </th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
                             Domain
                           </th>
@@ -1200,9 +1274,18 @@ export default function AdminGondola() {
                               )
                             : []
                           const isExpanded = expandedDomainId === domain.id
+                          const isSelected = selectedDomainIds.has(domain.id)
                           return (
                             <Fragment key={domain.id}>
-                              <tr className="hover:bg-gray-50">
+                              <tr className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}>
+                                <td className="px-3 py-2 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => handleToggleDomainSelection(domain.id)}
+                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                                </td>
                                 <td className="px-3 py-2">
                                   <button
                                     type="button"
@@ -1226,7 +1309,7 @@ export default function AdminGondola() {
                               </tr>
                               {isExpanded && (
                                 <tr className="bg-gray-50">
-                                  <td colSpan={4} className="px-4 py-4 text-sm">
+                                  <td colSpan={5} className="px-4 py-4 text-sm">
                                     <div className="flex flex-col gap-4">
                                       <div>
                                         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
