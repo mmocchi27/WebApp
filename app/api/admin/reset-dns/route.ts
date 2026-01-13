@@ -393,7 +393,17 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    const { serverId, domainIds, masterDomain } = await request.json()
+    const { serverId, domainIds, masterDomain: rawMasterDomain } = await request.json()
+
+    // Normalize master domain - strip protocol and trailing slashes
+    let masterDomain: string | undefined
+    if (rawMasterDomain && typeof rawMasterDomain === 'string') {
+      masterDomain = rawMasterDomain
+        .trim()
+        .replace(/^https?:\/\//i, '')  // Remove http:// or https://
+        .replace(/\/+$/, '')            // Remove trailing slashes
+      if (!masterDomain) masterDomain = undefined
+    }
 
     if (!serverId) {
       return NextResponse.json({ error: "Server ID is required" }, { status: 400 })
@@ -455,12 +465,12 @@ export async function POST(request: NextRequest) {
 
         // If master domain is provided, set up redirect
         let redirectConfigured = false
-        if (masterDomain && masterDomain.trim()) {
+        if (masterDomain) {
           try {
             await configureMasterDomainRedirect(
               domain.domainName,
               domain.cloudflareZoneId,
-              masterDomain.trim()
+              masterDomain
             )
             
             // Update database with master domain info
@@ -472,7 +482,7 @@ export async function POST(request: NextRequest) {
                 }
               },
               data: {
-                masterDomain: masterDomain.trim(),
+                masterDomain: masterDomain,
                 redirectConfigured: true,
                 updatedAt: new Date()
               }
