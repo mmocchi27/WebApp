@@ -243,18 +243,10 @@ async function resetDnsForDomain(domain: string, zoneId: string, serverId: strin
   }
 }
 
-async function configureMasterDomainRedirect(
-  domainName: string,
-  zoneId: string,
-  masterDomain: string
-) {
-  console.log(`🌐 Setting up master domain redirect for ${domainName} → ${masterDomain}`)
-
-  // Step 1: Delete old Redirect Rules
-  console.log(`  🗑️ Clearing old Redirect Rules...`)
+async function deleteAllPageRules(zoneId: string) {
   try {
-    const rulesetsResponse = await axios.get(
-      `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rulesets`,
+    const response = await axios.get(
+      `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules`,
       {
         headers: {
           'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
@@ -263,12 +255,13 @@ async function configureMasterDomainRedirect(
       }
     )
 
-    if (rulesetsResponse.data?.success && Array.isArray(rulesetsResponse.data.result)) {
-      for (const ruleset of rulesetsResponse.data.result) {
-        if (ruleset.phase === 'http_request_dynamic_redirect' && ruleset.id) {
+    if (response.data?.success) {
+      const pageRules = response.data.result || []
+      for (const rule of pageRules) {
+        if (rule.id) {
           try {
             await axios.delete(
-              `${CLOUDFLARE_API_BASE}/zones/${zoneId}/rulesets/${ruleset.id}`,
+              `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules/${rule.id}`,
               {
                 headers: {
                   'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
@@ -276,103 +269,80 @@ async function configureMasterDomainRedirect(
                 }
               }
             )
-            console.log(`    ✅ Deleted redirect ruleset ${ruleset.id}`)
           } catch (e: any) {
-            console.warn(`    ⚠️ Failed to delete ruleset ${ruleset.id}:`, e?.message)
+            console.error(`Failed to delete page rule ${rule.id}:`, e?.message)
           }
         }
       }
     }
-  } catch (e: any) {
-    console.warn(`  ⚠️ Could not clear redirect rules:`, e?.message)
+  } catch (error: any) {
+    console.error(`Failed to list page rules for zone ${zoneId}:`, error?.message)
+  }
+}
+
+async function createPageRule(
+  zoneId: string,
+  sourcePattern: string,
+  targetUrl: string,
+  priority: number
+) {
+  const payload = {
+    targets: [
+      {
+        target: 'url',
+        constraint: {
+          operator: 'matches',
+          value: sourcePattern,
+        },
+      },
+    ],
+    actions: [
+      {
+        id: 'forwarding_url',
+        value: {
+          url: targetUrl,
+          status_code: 301,
+        },
+      },
+    ],
+    priority,
+    status: 'active',
   }
 
-  // Step 2: Delete old Page Rules
-  console.log(`  🗑️ Clearing old Page Rules...`)
-  try {
-    const listResponse = await axios.get(
-      `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules`,
-      {
-        headers: {
-          'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    )
-
-    if (listResponse.data?.success && Array.isArray(listResponse.data.result)) {
-      for (const rule of listResponse.data.result) {
-        if (!rule.id) continue
-        try {
-          await axios.delete(
-            `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules/${rule.id}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
-                'Content-Type': 'application/json'
-              }
-            }
-          )
-          console.log(`    ✅ Deleted page rule ${rule.id}`)
-        } catch (e: any) {
-          console.warn(`    ⚠️ Failed to delete page rule ${rule.id}:`, e?.message)
-        }
+  const response = await axios.post(
+    `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules`,
+    payload,
+    {
+      headers: {
+        'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
+        'Content-Type': 'application/json'
       }
     }
-  } catch (e: any) {
-    console.warn(`  ⚠️ Could not clear page rules:`, e?.message)
-  }
+  )
 
-  // Step 3: Create new page rules for redirect
+  if (!response.data?.success) {
+    throw new Error(
+      response.data?.errors?.[0]?.message ||
+      `Cloudflare returned an error while creating page rule`
+    )
+  }
+}
+
+async function configureMasterDomainRedirect(
+  domainName: string,
+  zoneId: string,
+  masterDomain: string
+) {
+  await deleteAllPageRules(zoneId)
+
   const rules = [
     { source: `${domainName}/*`, priority: 1 },
     { source: `www.${domainName}/*`, priority: 2 }
   ]
 
   for (const rule of rules) {
-    const payload = {
-      targets: [
-        {
-          target: 'url',
-          constraint: {
-            operator: 'matches',
-            value: rule.source
-          }
-        }
-      ],
-      actions: [
-        {
-          id: 'forwarding_url',
-          value: {
-            url: `https://${masterDomain}/$1`,
-            status_code: 301
-          }
-        }
-      ],
-      priority: rule.priority,
-      status: 'active'
-    }
-
-    const createResponse = await axios.post(
-      `${CLOUDFLARE_API_BASE}/zones/${zoneId}/pagerules`,
-      payload,
-      {
-        headers: {
-          'Authorization': `Bearer ${CLOUDFLARE_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    )
-
-    if (!createResponse.data?.success) {
-      throw new Error(
-        createResponse.data?.errors?.[0]?.message ||
-        `Cloudflare returned an error while creating redirect rule`
-      )
-    }
+    await createPageRule(zoneId, rule.source, `https://${masterDomain}/$1`, rule.priority)
   }
-
-  console.log(`✅ Master domain redirect configured for ${domainName}`)
 }
 
 export async function POST(request: NextRequest) {
