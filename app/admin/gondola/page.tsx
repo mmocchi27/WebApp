@@ -124,6 +124,7 @@ export default function AdminGondola() {
   const [checkingIPStatus, setCheckingIPStatus] = useState<string | null>(null)
   const [clearingServer, setClearingServer] = useState<string | null>(null)
   const [resettingDns, setResettingDns] = useState(false)
+  const [resettingSingleDomain, setResettingSingleDomain] = useState<string | null>(null)
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -522,6 +523,63 @@ export default function AdminGondola() {
       setDetailsNotice({ type: "error", text: "Failed to reset DNS. Please try again." })
     } finally {
       setResettingDns(false)
+    }
+  }
+
+  const handleResetSingleDomain = async (domainId: string, domainName: string) => {
+    if (!subscriptionDetails?.server?.id) return
+
+    const confirmed = window.confirm(
+      `Reset DNS for ${domainName}?\n\nThis will delete all existing DNS records and recreate them.`
+    )
+
+    if (!confirmed) return
+
+    setResettingSingleDomain(domainId)
+    setDetailsNotice(null)
+
+    try {
+      const response = await fetch('/api/admin/reset-dns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serverId: subscriptionDetails.server.id,
+          domainIds: [domainId],
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setDetailsNotice({ 
+          type: "error", 
+          text: data.error || data.message || `Failed to reset DNS for ${domainName}` 
+        })
+        return
+      }
+
+      // Refresh subscription details
+      await fetchSubscriptionDetails(subscriptionDetails.server.subscriptionId)
+
+      const result = data.results?.[0]
+      if (result?.success) {
+        setDetailsNotice({ 
+          type: "success", 
+          text: `DNS reset for ${domainName}: ${result.created}/${result.total} records created` 
+        })
+      } else {
+        setDetailsNotice({ 
+          type: "error", 
+          text: `DNS reset failed for ${domainName}: ${result?.error || 'Unknown error'}` 
+        })
+      }
+    } catch (error) {
+      console.error("Error resetting single domain DNS:", error)
+      setDetailsNotice({ type: "error", text: `Failed to reset DNS for ${domainName}` })
+    } finally {
+      setResettingSingleDomain(null)
     }
   }
 
@@ -1235,6 +1293,16 @@ export default function AdminGondola() {
                                           </p>
                                           <p className="text-sm">{domain.dnsConfigured ? "Yes" : "No"}</p>
                                         </div>
+                                      </div>
+                                      <div className="mt-4 pt-4 border-t border-gray-200">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleResetSingleDomain(domain.id, domain.domainName)}
+                                          disabled={resettingSingleDomain === domain.id || resettingDns || checkingDomainStatus}
+                                        >
+                                          {resettingSingleDomain === domain.id ? "Resetting..." : "Reset DNS for this Domain"}
+                                        </Button>
                                       </div>
                                     </div>
                                   </td>
