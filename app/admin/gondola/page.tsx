@@ -501,20 +501,6 @@ export default function AdminGondola() {
   const handleResetDns = async () => {
     if (!subscriptionDetails?.server?.id || subscriptionDetails.domains.length === 0) return
 
-    const domainsToReset = selectedDomainIds.size > 0 
-      ? subscriptionDetails.domains.filter(d => selectedDomainIds.has(d.id))
-      : subscriptionDetails.domains
-
-    const masterDomainInfo = resetMasterDomain.trim() 
-      ? `\n- Set up redirect to: ${resetMasterDomain.trim()}` 
-      : ''
-
-    const confirmed = window.confirm(
-      `Are you sure you want to reset DNS for ${domainsToReset.length} domain(s)?${masterDomainInfo}\n\nThis will:\n- Delete ALL existing DNS records from Cloudflare\n- Recreate all standard DNS records (A, MX, SPF, DMARC, DKIM)\n- Update the database with new record values\n\nThis action cannot be undone.`
-    )
-
-    if (!confirmed) return
-
     setResettingDns(true)
     setDetailsNotice(null)
 
@@ -565,12 +551,6 @@ export default function AdminGondola() {
 
   const handleResetSingleDomain = async (domainId: string, domainName: string) => {
     if (!subscriptionDetails?.server?.id) return
-
-    const confirmed = window.confirm(
-      `Reset DNS for ${domainName}?\n\nThis will delete all existing DNS records and recreate them.`
-    )
-
-    if (!confirmed) return
 
     setResettingSingleDomain(domainId)
     setDetailsNotice(null)
