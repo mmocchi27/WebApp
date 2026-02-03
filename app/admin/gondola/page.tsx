@@ -9,6 +9,16 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -123,6 +133,8 @@ export default function AdminGondola() {
   const [checkingDomainStatus, setCheckingDomainStatus] = useState(false)
   const [checkingIPStatus, setCheckingIPStatus] = useState<string | null>(null)
   const [clearingServer, setClearingServer] = useState<string | null>(null)
+  const [clearServerDialogOpen, setClearServerDialogOpen] = useState(false)
+  const [serverToClear, setServerToClear] = useState<{ id: string; name: string | null } | null>(null)
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -507,18 +519,18 @@ export default function AdminGondola() {
     }
   }
 
-  const handleClearServer = async (serverId: string, serverName: string | null) => {
+  const handleOpenClearServerDialog = (serverId: string, serverName: string | null) => {
+    setServerToClear({ id: serverId, name: serverName })
+    setClearServerDialogOpen(true)
+  }
+
+  const handleClearServer = async () => {
+    if (!serverToClear) return
+
+    const { id: serverId, name: serverName } = serverToClear
     console.log('handleClearServer called with:', { serverId, serverName })
-    
-    const confirmed = window.confirm(
-      `Are you sure you want to clear all domains and inboxes from server "${serverName || serverId}"?\n\nThis will:\n- Delete all domains from Cloudflare and MailCow\n- Delete all inboxes from MailCow\n- Remove all domain and inbox records from the database\n\nThis action cannot be undone.`
-    )
 
-    if (!confirmed) {
-      console.log('User cancelled the confirmation')
-      return
-    }
-
+    setClearServerDialogOpen(false)
     setClearingServer(serverId)
     setTableError(null)
 
@@ -558,6 +570,7 @@ export default function AdminGondola() {
       setTableError('Failed to clear server. Please try again.')
     } finally {
       setClearingServer(null)
+      setServerToClear(null)
     }
   }
 
@@ -966,13 +979,8 @@ export default function AdminGondola() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => {
-                                handleClearServer(server.id, server.serverName).catch((error) => {
-                                  console.error('Error in handleClearServer:', error)
-                                  setTableError('Failed to clear server. Please try again.')
-                                })
-                              }}
-                              disabled={clearingServer === server.id}
+                              onClick={() => handleOpenClearServerDialog(server.id, server.serverName)}
+                              disabled={clearingServer === server.id || clearingServer !== null}
                               className="text-xs"
                             >
                               {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
@@ -1287,6 +1295,35 @@ export default function AdminGondola() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={clearServerDialogOpen} onOpenChange={setClearServerDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear Server</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to clear all domains and inboxes from server "{serverToClear?.name || serverToClear?.id}"?
+              <br /><br />
+              This will:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Delete all domains from Cloudflare and MailCow</li>
+                <li>Delete all inboxes from MailCow</li>
+                <li>Remove all domain and inbox records from the database</li>
+              </ul>
+              <br />
+              <strong>This action cannot be undone.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearServer}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Clear Server
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
