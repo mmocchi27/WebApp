@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 import { cleanupServerResources } from "@/lib/serverCleanup"
 
 async function isAdmin(userId: string): Promise<boolean> {
-  const adminEmail = process.env.ADMIN_EMAIL
-  if (!adminEmail) return false
-
-  const user = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
-    headers: { Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}` },
-  }).then((res) => res.json())
-
-  const userEmail = user.email_addresses?.find((e: any) => e.id === user.primary_email_address_id)?.email_address
-  return userEmail === adminEmail
+  try {
+    const client = await clerkClient()
+    const user = await client.users.getUser(userId)
+    const userEmail = user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress
+    const adminEmail = process.env.ADMIN_EMAIL || 'mitch@mailmountains.com'
+    return userEmail === adminEmail
+  } catch (error) {
+    console.error('Error checking admin status:', error)
+    return false
+  }
 }
 
 export async function POST(request: NextRequest) {

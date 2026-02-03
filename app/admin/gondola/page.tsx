@@ -508,16 +508,22 @@ export default function AdminGondola() {
   }
 
   const handleClearServer = async (serverId: string, serverName: string | null) => {
+    console.log('handleClearServer called with:', { serverId, serverName })
+    
     const confirmed = window.confirm(
       `Are you sure you want to clear all domains and inboxes from server "${serverName || serverId}"?\n\nThis will:\n- Delete all domains from Cloudflare and MailCow\n- Delete all inboxes from MailCow\n- Remove all domain and inbox records from the database\n\nThis action cannot be undone.`
     )
 
-    if (!confirmed) return
+    if (!confirmed) {
+      console.log('User cancelled the confirmation')
+      return
+    }
 
     setClearingServer(serverId)
     setTableError(null)
 
     try {
+      console.log('Sending request to /api/admin/clear-server with serverId:', serverId)
       const response = await fetch('/api/admin/clear-server', {
         method: 'POST',
         headers: {
@@ -526,15 +532,24 @@ export default function AdminGondola() {
         body: JSON.stringify({ serverId }),
       })
 
+      console.log('Response status:', response.status, response.statusText)
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error('Error response:', errorData)
         setTableError(errorData.error || 'Failed to clear server')
         return
       }
 
+      const data = await response.json()
+      console.log('Success response:', data)
+
       // Refresh servers to show updated state
       if (currentOrgId) {
+        console.log('Refreshing servers with currentOrgId:', currentOrgId)
         await fetchServers(currentOrgId)
+      } else {
+        console.log('No currentOrgId, skipping refresh')
       }
 
       setTableError(null)
@@ -951,7 +966,12 @@ export default function AdminGondola() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => void handleClearServer(server.id, server.serverName)}
+                              onClick={() => {
+                                handleClearServer(server.id, server.serverName).catch((error) => {
+                                  console.error('Error in handleClearServer:', error)
+                                  setTableError('Failed to clear server. Please try again.')
+                                })
+                              }}
                               disabled={clearingServer === server.id}
                               className="text-xs"
                             >
