@@ -689,14 +689,13 @@ export default function AdminGondola() {
     setOrgInputError(null)
     setFetchError(null)
     setTableError(null)
-    setSavingField(null)
     setDetailsDialogOpen(false)
     resetDetailsState()
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
@@ -795,9 +794,9 @@ export default function AdminGondola() {
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
                       <tr>
-                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider max-w-[100px]">ID</th>
-                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider max-w-[120px]">Sub ID</th>
-                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider max-w-[120px]">Org ID</th>
+                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">ID</th>
+                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Sub ID</th>
+                        <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Org ID</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server Name</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">IP Address</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">API Key</th>
@@ -814,8 +813,8 @@ export default function AdminGondola() {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {servers.map((server) => (
                         <tr key={server.id} className="hover:bg-gray-50">
-                          <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[100px]">{server.id}</td>
-                          <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[120px]">
+                          <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all">{server.id}</td>
+                          <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all">
                             <button
                               type="button"
                               onClick={() => handleOpenSubscriptionDetails(server.subscriptionId)}
@@ -824,7 +823,7 @@ export default function AdminGondola() {
                               {server.subscriptionId}
                             </button>
                           </td>
-                          <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[120px]">{server.organizationId}</td>
+                          <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all">{server.organizationId}</td>
                           <td className="px-4 py-3 text-sm">
                             <Input
                               value={formData[server.id]?.serverName ?? ''}
@@ -965,17 +964,15 @@ export default function AdminGondola() {
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.updatedAt).toLocaleString()}</td>
                           <td className="px-4 py-3 text-sm">
                             <div className="flex flex-col gap-2">
-                              {dirtyServers.has(server.id) && (
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => void handleSaveServer(server.id)}
-                                  disabled={savingServer === server.id}
-                                  className="text-xs bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                  {savingServer === server.id ? 'Saving...' : 'Save Changes'}
-                                </Button>
-                              )}
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => void handleSaveServer(server.id)}
+                                disabled={!dirtyServers.has(server.id) || savingServer === server.id}
+                                className={`text-xs ${dirtyServers.has(server.id) ? 'bg-green-600 hover:bg-green-700 text-white animate-pulse' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                              >
+                                {savingServer === server.id ? 'Saving...' : dirtyServers.has(server.id) ? '💾 Save Changes' : 'No Changes'}
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="destructive"
