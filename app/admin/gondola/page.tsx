@@ -120,7 +120,6 @@ export default function AdminGondola() {
   const [orgInputError, setOrgInputError] = useState<string | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [tableError, setTableError] = useState<string | null>(null)
-  const [savingField, setSavingField] = useState<string | null>(null)
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [detailsError, setDetailsError] = useState<string | null>(null)
@@ -133,6 +132,8 @@ export default function AdminGondola() {
   const [checkingDomainStatus, setCheckingDomainStatus] = useState(false)
   const [checkingIPStatus, setCheckingIPStatus] = useState<string | null>(null)
   const [clearingServer, setClearingServer] = useState<string | null>(null)
+  const [dirtyServers, setDirtyServers] = useState<Set<string>>(new Set())
+  const [savingServer, setSavingServer] = useState<string | null>(null)
   const [clearServerDialogOpen, setClearServerDialogOpen] = useState(false)
   const [serverToClear, setServerToClear] = useState<{ id: string; name: string | null } | null>(null)
 
@@ -262,7 +263,30 @@ export default function AdminGondola() {
 
       if (response.ok) {
         setTableError(null)
-        await fetchServers(organizationId)
+        // Silently refresh server data without resetting form state
+        try {
+          const isSubscriptionId = organizationId.startsWith('sub_')
+          const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(organizationId.trim())
+          let url: string
+          if (isSubscriptionId) {
+            url = `/api/admin/servers?subscriptionId=${encodeURIComponent(organizationId)}`
+          } else if (isIPAddress) {
+            url = `/api/admin/servers?ipAddress=${encodeURIComponent(organizationId)}`
+          } else {
+            url = `/api/admin/servers?orgId=${encodeURIComponent(organizationId)}`
+          }
+          const refreshRes = await fetch(url)
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json()
+            const refreshedServers: Server[] = (refreshData.servers || []).filter((s: Server) => {
+              const ns = s.status?.toLowerCase()
+              return ns === 'active' || ns === 'pending' || ns === 'suspended'
+            })
+            setServers(refreshedServers)
+          }
+        } catch {
+          // Silent refresh failed, not critical
+        }
         return true
       } else {
         const errorData = await response.json()
@@ -285,44 +309,35 @@ export default function AdminGondola() {
         [field]: value
       }
     }))
+    setDirtyServers(prev => new Set(prev).add(serverId))
   }
 
-  const handleFieldCommit = async (serverId: string, field: EditableField, nextValue?: string) => {
+  const handleSaveServer = async (serverId: string) => {
     const server = servers.find((s) => s.id === serverId)
     if (!server) return
 
-    const existingValues = formData[serverId] || {
-      serverName: server.serverName || '',
-      ipAddress: server.ipAddress || '',
-      apiKey: server.apiKey || '',
-      hostname: server.hostname || '',
-      status: server.status,
-      domainLimit: String(server.domainLimit ?? 34),
-      inboxLimit: String(server.inboxLimit ?? 102),
-    }
+    setSavingServer(serverId)
+    setTableError(null)
 
-    const updatedValues: ServerFormState = {
-      ...existingValues,
-      ...(nextValue !== undefined ? { [field]: nextValue } : {}),
-    } as ServerFormState
-
-    const serverValueRaw = server[field as keyof Server]
-    const currentServerValue =
-      serverValueRaw === null || serverValueRaw === undefined
-        ? ''
-        : typeof serverValueRaw === 'number'
-        ? String(serverValueRaw)
-        : String(serverValueRaw)
-    const pendingValue = (updatedValues[field] || '').trim()
-
-    if (currentServerValue === pendingValue) {
+    const currentValues = formData[serverId]
+    if (!currentValues) {
+      setSavingServer(null)
       return
     }
 
-    const fieldKey = `${serverId}-${field}`
-    setSavingField(fieldKey)
-    await handleUpdate(server.id, server.subscriptionId, server.organizationId, updatedValues)
-    setSavingField(null)
+    const success = await handleUpdate(server.id, server.subscriptionId, server.organizationId, currentValues)
+
+    if (success) {
+      setDirtyServers(prev => {
+        const next = new Set(prev)
+        next.delete(serverId)
+        return next
+      })
+      setTableError('✅ Server saved successfully')
+      setTimeout(() => setTableError(null), 3000)
+    }
+
+    setSavingServer(null)
   }
 
   const resetDetailsState = () => {
@@ -814,77 +829,46 @@ export default function AdminGondola() {
                             <Input
                               value={formData[server.id]?.serverName ?? ''}
                               onChange={(e) => handleChange(server.id, 'serverName', e.target.value)}
-                              onBlur={(e) => void handleFieldCommit(server.id, 'serverName', e.currentTarget.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  e.currentTarget.blur()
-                                }
-                              }}
                               placeholder="Server name"
-                              className="w-full"
-                              disabled={savingField === `${server.id}-serverName`}
+                              className={`w-full ${dirtyServers.has(server.id) ? 'border-yellow-400' : ''}`}
+                              disabled={savingServer === server.id}
                             />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <Input
                               value={formData[server.id]?.ipAddress ?? ''}
                               onChange={(e) => handleChange(server.id, 'ipAddress', e.target.value)}
-                              onBlur={(e) => void handleFieldCommit(server.id, 'ipAddress', e.currentTarget.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  e.currentTarget.blur()
-                                }
-                              }}
                               placeholder="192.168.1.1"
-                              className="w-full font-mono"
-                              disabled={savingField === `${server.id}-ipAddress`}
+                              className={`w-full font-mono ${dirtyServers.has(server.id) ? 'border-yellow-400' : ''}`}
+                              disabled={savingServer === server.id}
                             />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <Input
                               value={formData[server.id]?.apiKey ?? ''}
                               onChange={(e) => handleChange(server.id, 'apiKey', e.target.value)}
-                              onBlur={(e) => void handleFieldCommit(server.id, 'apiKey', e.currentTarget.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  e.currentTarget.blur()
-                                }
-                              }}
                               placeholder="sk_..."
-                              className="w-full font-mono"
+                              className={`w-full font-mono ${dirtyServers.has(server.id) ? 'border-yellow-400' : ''}`}
                               type="password"
                               autoComplete="off"
-                              disabled={savingField === `${server.id}-apiKey`}
+                              disabled={savingServer === server.id}
                             />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <Input
                               value={formData[server.id]?.hostname ?? ''}
                               onChange={(e) => handleChange(server.id, 'hostname', e.target.value)}
-                              onBlur={(e) => void handleFieldCommit(server.id, 'hostname', e.currentTarget.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  e.currentTarget.blur()
-                                }
-                              }}
                               placeholder="mail.example.com"
-                              className="w-full font-mono"
-                              disabled={savingField === `${server.id}-hostname`}
+                              className={`w-full font-mono ${dirtyServers.has(server.id) ? 'border-yellow-400' : ''}`}
+                              disabled={savingServer === server.id}
                             />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <select
                               value={formData[server.id]?.status || 'pending'}
-                              onChange={(e) => {
-                                handleChange(server.id, 'status', e.target.value)
-                                void handleFieldCommit(server.id, 'status', e.target.value)
-                              }}
-                              className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
-                              disabled={savingField === `${server.id}-status`}
+                              onChange={(e) => handleChange(server.id, 'status', e.target.value)}
+                              className={`w-full px-2 py-1 border rounded-md text-sm ${dirtyServers.has(server.id) ? 'border-yellow-400' : 'border-gray-300'}`}
+                              disabled={savingServer === server.id}
                             >
                               <option value="pending">Pending</option>
                               <option value="active">Active</option>
@@ -897,15 +881,8 @@ export default function AdminGondola() {
                               min={1}
                               value={formData[server.id]?.domainLimit ?? '34'}
                               onChange={(e) => handleChange(server.id, 'domainLimit', e.target.value)}
-                              onBlur={(e) => void handleFieldCommit(server.id, 'domainLimit', e.currentTarget.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  e.currentTarget.blur()
-                                }
-                              }}
-                              className="w-full"
-                              disabled={savingField === `${server.id}-domainLimit`}
+                              className={`w-full ${dirtyServers.has(server.id) ? 'border-yellow-400' : ''}`}
+                              disabled={savingServer === server.id}
                             />
                           </td>
                           <td className="px-4 py-3 text-sm">
@@ -914,15 +891,8 @@ export default function AdminGondola() {
                               min={1}
                               value={formData[server.id]?.inboxLimit ?? '102'}
                               onChange={(e) => handleChange(server.id, 'inboxLimit', e.target.value)}
-                              onBlur={(e) => void handleFieldCommit(server.id, 'inboxLimit', e.currentTarget.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  e.currentTarget.blur()
-                                }
-                              }}
-                              className="w-full"
-                              disabled={savingField === `${server.id}-inboxLimit`}
+                              className={`w-full ${dirtyServers.has(server.id) ? 'border-yellow-400' : ''}`}
+                              disabled={savingServer === server.id}
                             />
                           </td>
                           <td className="px-4 py-3 text-sm">
@@ -994,15 +964,28 @@ export default function AdminGondola() {
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.createdAt).toLocaleString()}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.updatedAt).toLocaleString()}</td>
                           <td className="px-4 py-3 text-sm">
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleOpenClearServerDialog(server.id, server.serverName)}
-                              disabled={clearingServer === server.id || clearingServer !== null}
-                              className="text-xs"
-                            >
-                              {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
-                            </Button>
+                            <div className="flex flex-col gap-2">
+                              {dirtyServers.has(server.id) && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => void handleSaveServer(server.id)}
+                                  disabled={savingServer === server.id}
+                                  className="text-xs bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  {savingServer === server.id ? 'Saving...' : 'Save Changes'}
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleOpenClearServerDialog(server.id, server.serverName)}
+                                disabled={clearingServer === server.id || clearingServer !== null}
+                                className="text-xs"
+                              >
+                                {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
