@@ -485,6 +485,7 @@ export default function AdminGondola() {
     setTableError(null)
 
     try {
+      console.log(`[Check IP] Starting check for server: ${serverId}`)
       const response = await fetch('/api/admin/check-ip-blacklist', {
         method: 'POST',
         headers: {
@@ -493,13 +494,28 @@ export default function AdminGondola() {
         body: JSON.stringify({ serverId }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        setTableError(errorData.error || errorData.message || 'Failed to check IP blacklist status')
+      console.log(`[Check IP] Response status: ${response.status} ${response.statusText}`)
+
+      const responseText = await response.text()
+      console.log(`[Check IP] Raw response: ${responseText}`)
+
+      let data: any
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        console.error('[Check IP] Failed to parse response as JSON:', responseText)
+        setTableError(`❌ Check IP failed: Server returned non-JSON response (HTTP ${response.status}). Check Vercel logs.`)
         return
       }
 
-      const data = await response.json()
+      if (!response.ok) {
+        const errorMsg = data.error || data.message || `HTTP ${response.status}`
+        console.error(`[Check IP] API error:`, data)
+        setTableError(`❌ Check IP failed (HTTP ${response.status}): ${errorMsg}`)
+        return
+      }
+
+      console.log(`[Check IP] Success:`, data)
       
       // Refresh servers to show updated status
       if (currentOrgId) {
@@ -509,11 +525,13 @@ export default function AdminGondola() {
       if (data.blacklistResult?.status === 'Blacklisted') {
         setTableError(`⚠️ IP is blacklisted: ${data.blacklistResult.blacklists?.length || 0} blacklist(s) found (${data.blacklistResult.blacklistSeverity || 'Unknown'} severity)`)
       } else {
-        setTableError(null)
+        setTableError(`✅ IP check complete: ${data.blacklistResult?.status || 'Not blacklisted'}`)
+        // Auto-clear success message after 5 seconds
+        setTimeout(() => setTableError(null), 5000)
       }
-    } catch (error) {
-      console.error('Error checking IP status:', error)
-      setTableError('Failed to check IP blacklist status. Please try again.')
+    } catch (error: any) {
+      console.error('[Check IP] Network/fetch error:', error)
+      setTableError(`❌ Check IP failed: ${error?.message || 'Network error'}. Check browser console for details.`)
     } finally {
       setCheckingIPStatus(null)
     }
@@ -994,7 +1012,11 @@ export default function AdminGondola() {
               )}
             </CardContent>
             {tableError && (
-              <div className="px-6 py-4 border-t text-sm text-red-600">
+              <div className={`px-6 py-4 border-t text-sm font-medium ${
+                tableError.startsWith('✅') ? 'text-green-600 bg-green-50' : 
+                tableError.startsWith('⚠️') ? 'text-yellow-700 bg-yellow-50' : 
+                'text-red-600 bg-red-50'
+              }`}>
                 {tableError}
               </div>
             )}
