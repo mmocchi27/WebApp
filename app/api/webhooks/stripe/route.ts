@@ -161,7 +161,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     }
 
     // Check if server already exists (prevent duplicates)
-    const existingServer = await prisma.server.findUnique({
+    const existingServer = await prisma.server.findFirst({
       where: { subscriptionId: subscription.id }
     })
 
