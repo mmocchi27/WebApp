@@ -732,30 +732,28 @@ export default function AdminGondola() {
                   <p className="text-gray-500">No servers found for {currentOrgId || 'your search'}.</p>
                 </div>
               ) : (
-                <>
-                  <div className="border-b border-gray-200 px-4 pt-4">
-                    <div className="flex space-x-4">
-                      <button
-                        onClick={() => setServerTab("active")}
-                        className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                          serverTab === "active"
-                            ? "border-blue-600 text-blue-600"
-                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                        }`}
-                      >
-                        Active / Pending / Unpaid ({servers.length})
-                      </button>
-                      <button
-                        onClick={() => setServerTab("cancelled")}
-                        className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                          serverTab === "cancelled"
-                            ? "border-red-600 text-red-600"
-                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                        }`}
-                      >
-                        Cancelled ({cancelledServers.length})
-                      </button>
-                    </div>
+                <div>
+                  <div className="flex space-x-4 px-4 pt-3 border-b border-gray-200">
+                    <button
+                      onClick={() => setServerTab("active")}
+                      className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                        serverTab === "active"
+                          ? "border-blue-600 text-blue-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      Active / Pending / Unpaid ({servers.length})
+                    </button>
+                    <button
+                      onClick={() => setServerTab("cancelled")}
+                      className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                        serverTab === "cancelled"
+                          ? "border-red-600 text-red-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      Cancelled ({cancelledServers.length})
+                    </button>
                   </div>
                   {serverTab === "active" && servers.length === 0 ? (
                     <div className="py-12 text-center">
@@ -999,7 +997,7 @@ export default function AdminGondola() {
                   </table>
                 </div>
                   )}
-                </>
+                </div>
               )}
             </CardContent>
             {tableError && (
