@@ -155,18 +155,11 @@ export default function AdminGondola() {
     setHasSearched(true)
 
     try {
-      // Determine if it's an org ID (starts with org_), subscription ID (starts with sub_), or IP address
+      // Determine if it's an org ID (starts with org_) or subscription ID (starts with sub_)
       const isSubscriptionId = query.startsWith('sub_')
-      const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(query.trim())
-      
-      let url: string
-      if (isSubscriptionId) {
-        url = `/api/admin/servers?subscriptionId=${encodeURIComponent(query)}`
-      } else if (isIPAddress) {
-        url = `/api/admin/servers?ipAddress=${encodeURIComponent(query)}`
-      } else {
-        url = `/api/admin/servers?orgId=${encodeURIComponent(query)}`
-      }
+      const url = isSubscriptionId 
+        ? `/api/admin/servers?subscriptionId=${encodeURIComponent(query)}`
+        : `/api/admin/servers?orgId=${encodeURIComponent(query)}`
       
       const response = await fetch(url)
       if (!response.ok) {
@@ -180,7 +173,7 @@ export default function AdminGondola() {
       const data = await response.json()
       const filteredServers: Server[] = (data.servers || []).filter((server: Server) => {
         const normalizedStatus = server.status?.toLowerCase()
-        return normalizedStatus === 'active' || normalizedStatus === 'pending' || normalizedStatus === 'suspended'
+        return normalizedStatus === 'active' || normalizedStatus === 'pending'
       })
 
       setServers(filteredServers)
@@ -604,7 +597,7 @@ export default function AdminGondola() {
   const handleQuerySubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!queryOrgId.trim()) {
-      setOrgInputError("Organization ID, Subscription ID, or IP Address is required")
+      setOrgInputError("Organization ID or Subscription ID is required")
       return
     }
 
@@ -676,10 +669,10 @@ export default function AdminGondola() {
               <CardContent className="pt-6">
                 <form onSubmit={handleQuerySubmit} className="flex flex-col gap-4 md:flex-row md:items-end">
                   <div className="flex-1">
-                    <Label htmlFor="orgId">Organization ID, Subscription ID, or IP Address</Label>
+                    <Label htmlFor="orgId">Organization ID or Subscription ID</Label>
                     <Input
                       id="orgId"
-                      placeholder="org_35fvmZQfMIl9YuY6mFJ13r9Bq8o, sub_1ABC..., or 192.168.1.1"
+                      placeholder="org_35fvmZQfMIl9YuY6mFJ13r9Bq8o or sub_1ABC..."
                       value={queryOrgId}
                       onChange={(e) => setQueryOrgId(e.target.value)}
                       autoComplete="off"
@@ -727,7 +720,7 @@ export default function AdminGondola() {
                 </div>
               ) : servers.length === 0 ? (
                 <div className="py-12 text-center">
-                  <p className="text-gray-500">No active, pending, or suspended servers found for {currentOrgId || 'your search'}.</p>
+                  <p className="text-gray-500">No active or pending servers found for {currentOrgId || 'your search'}.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -747,7 +740,6 @@ export default function AdminGondola() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Blacklist Status</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Updated At</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -916,6 +908,15 @@ export default function AdminGondola() {
                                 >
                                   {checkingIPStatus === server.id ? 'Checking...' : 'Check IP Status'}
                                 </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => void handleClearServer(server.id, server.serverName)}
+                                  disabled={clearingServer === server.id}
+                                  className="mt-1 text-xs"
+                                >
+                                  {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
+                                </Button>
                                 {server.blacklists && server.blacklists.length > 0 && (
                                   <details className="mt-1">
                                     <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">
@@ -947,22 +948,13 @@ export default function AdminGondola() {
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.createdAt).toLocaleString()}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.updatedAt).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-sm">
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => void handleClearServer(server.id, server.serverName)}
-                              disabled={clearingServer === server.id}
-                              className="text-xs"
-                            >
-                              {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
-                            </Button>
-                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                  )}
+                </>
               )}
             </CardContent>
             {tableError && (
