@@ -101,6 +101,8 @@ export default function AdminGondola() {
   const { organization } = useOrganization()
   const router = useRouter()
   const [servers, setServers] = useState<Server[]>([])
+  const [cancelledServers, setCancelledServers] = useState<Server[]>([])
+  const [serverTab, setServerTab] = useState<"active" | "cancelled">("active")
   const [loading, setLoading] = useState(false)
   const lastOrgIdRef = useRef<string | null>(null)
   const [formData, setFormData] = useState<Record<string, ServerFormState>>({})
@@ -171,15 +173,22 @@ export default function AdminGondola() {
       }
 
       const data = await response.json()
-      const filteredServers: Server[] = (data.servers || []).filter((server: Server) => {
-        const normalizedStatus = server.status?.toLowerCase()
-        return normalizedStatus === 'active' || normalizedStatus === 'pending'
+      const allServers: Server[] = data.servers || []
+
+      const activeServers: Server[] = allServers.filter((server: Server) => {
+        const s = server.status?.toLowerCase()
+        return s === 'active' || s === 'pending' || s === 'unpaid'
+      })
+      const cancelledServersList: Server[] = allServers.filter((server: Server) => {
+        const s = server.status?.toLowerCase()
+        return s === 'cancelled' || s === 'canceled'
       })
 
-      setServers(filteredServers)
+      setServers(activeServers)
+      setCancelledServers(cancelledServersList)
 
       const nextFormData: Record<string, ServerFormState> = {}
-      filteredServers.forEach((server: Server) => {
+      allServers.forEach((server: Server) => {
         nextFormData[server.id] = {
           serverName: server.serverName || '',
           ipAddress: server.ipAddress || '',
@@ -723,6 +732,40 @@ export default function AdminGondola() {
                   <p className="text-gray-500">No servers found for {currentOrgId || 'your search'}.</p>
                 </div>
               ) : (
+                <>
+                  <div className="border-b border-gray-200 px-4 pt-4">
+                    <div className="flex space-x-4">
+                      <button
+                        onClick={() => setServerTab("active")}
+                        className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                          serverTab === "active"
+                            ? "border-blue-600 text-blue-600"
+                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        Active / Pending / Unpaid ({servers.length})
+                      </button>
+                      <button
+                        onClick={() => setServerTab("cancelled")}
+                        className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                          serverTab === "cancelled"
+                            ? "border-red-600 text-red-600"
+                            : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        Cancelled ({cancelledServers.length})
+                      </button>
+                    </div>
+                  </div>
+                  {serverTab === "active" && servers.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <p className="text-gray-500">No active, pending, or unpaid servers found for {currentOrgId || 'your search'}.</p>
+                    </div>
+                  ) : serverTab === "cancelled" && cancelledServers.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <p className="text-gray-500">No cancelled servers found for {currentOrgId || 'your search'}.</p>
+                    </div>
+                  ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
@@ -743,8 +786,8 @@ export default function AdminGondola() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {servers.map((server) => (
-                        <tr key={server.id} className="hover:bg-gray-50">
+                      {(serverTab === "active" ? servers : cancelledServers).map((server) => (
+                        <tr key={server.id} className={`hover:bg-gray-50 ${serverTab === "cancelled" ? "bg-red-50/30" : ""}`}>
                           <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[100px]">{server.id}</td>
                           <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[120px]">
                             <button
@@ -834,7 +877,9 @@ export default function AdminGondola() {
                             >
                               <option value="pending">Pending</option>
                               <option value="active">Active</option>
+                              <option value="unpaid">Unpaid</option>
                               <option value="suspended">Suspended</option>
+                              <option value="cancelled">Cancelled</option>
                             </select>
                           </td>
                           <td className="px-4 py-3 text-sm">
@@ -953,6 +998,8 @@ export default function AdminGondola() {
                     </tbody>
                   </table>
                 </div>
+                  )}
+                </>
               )}
             </CardContent>
             {tableError && (
