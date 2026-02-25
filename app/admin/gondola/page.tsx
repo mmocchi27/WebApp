@@ -953,8 +953,6 @@ export default function AdminGondola() {
                     </tbody>
                   </table>
                 </div>
-                  )}
-                </>
               )}
             </CardContent>
             {tableError && (
