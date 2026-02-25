@@ -718,9 +718,9 @@ export default function AdminGondola() {
                 <div className="py-12 text-center">
                   <p className="text-red-600">{fetchError}</p>
                 </div>
-              ) : servers.length === 0 ? (
+              ) : servers.length === 0 && cancelledServers.length === 0 ? (
                 <div className="py-12 text-center">
-                  <p className="text-gray-500">No active or pending servers found for {currentOrgId || 'your search'}.</p>
+                  <p className="text-gray-500">No servers found for {currentOrgId || 'your search'}.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
