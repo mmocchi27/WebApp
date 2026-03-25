@@ -52,6 +52,8 @@ interface DomainRecord {
   spfRecord: string | null
   dmarcRecord: string | null
   dkimRecord: string | null
+  masterDomain: string | null
+  redirectConfigured: boolean
   createdAt: string
   updatedAt: string
 }
@@ -125,6 +127,9 @@ export default function AdminGondola() {
   const [checkingDomainStatus, setCheckingDomainStatus] = useState(false)
   const [checkingIPStatus, setCheckingIPStatus] = useState<string | null>(null)
   const [clearingServer, setClearingServer] = useState<string | null>(null)
+  const [selectedDomainIds, setSelectedDomainIds] = useState<Set<string>>(new Set())
+  const [adminMasterDomain, setAdminMasterDomain] = useState("")
+  const [applyingMasterDomain, setApplyingMasterDomain] = useState(false)
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -357,7 +362,83 @@ export default function AdminGondola() {
     setExpandedDomainId(null)
     setExportingNameservers(false)
     setExportingInboxes(null)
+    setSelectedDomainIds(new Set())
+    setAdminMasterDomain("")
+    setApplyingMasterDomain(false)
     fetchSubscriptionDetails(subscriptionId)
+  }
+
+  const toggleDomainSelection = (domainId: string) => {
+    setSelectedDomainIds(prev => {
+      const next = new Set(prev)
+      if (next.has(domainId)) next.delete(domainId)
+      else next.add(domainId)
+      return next
+    })
+  }
+
+  const toggleAllDomains = () => {
+    if (!subscriptionDetails) return
+    const allIds = subscriptionDetails.domains.map(d => d.id)
+    if (selectedDomainIds.size === allIds.length) {
+      setSelectedDomainIds(new Set())
+    } else {
+      setSelectedDomainIds(new Set(allIds))
+    }
+  }
+
+  const handleApplyMasterDomain = async () => {
+    if (!subscriptionDetails || !adminMasterDomain.trim() || selectedDomainIds.size === 0) return
+    setApplyingMasterDomain(true)
+    setDetailsNotice(null)
+
+    const selectedDomains = subscriptionDetails.domains.filter(d => selectedDomainIds.has(d.id))
+    const domainNames = selectedDomains.map(d => d.domainName)
+
+    try {
+      const response = await fetch("/api/admin/master-domain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serverId: subscriptionDetails.server.id,
+          masterDomain: adminMasterDomain.trim(),
+          domainNames,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setDetailsNotice({ type: "error", text: data.error || "Failed to apply master domain" })
+        return
+      }
+
+      const redirectInfo = data.redirects
+      let message = \`Master domain set to "${data.masterDomain}" for \${data.updated} domain(s).\`
+      if (redirectInfo?.configured !== undefined) {
+        message += \` Redirects configured: \${redirectInfo.configured}/\${redirectInfo.processed}.\`
+      }
+      if (redirectInfo?.results) {
+        const skipped = redirectInfo.results.filter((r: any) => r.status === "skipped")
+        const errors = redirectInfo.results.filter((r: any) => r.status === "error")
+        if (skipped.length > 0) message += \` \${skipped.length} skipped.\`
+        if (errors.length > 0) message += \` \${errors.length} failed.\`
+      }
+
+      setDetailsNotice({ type: "success", text: message })
+      setSelectedDomainIds(new Set())
+      setAdminMasterDomain("")
+
+      // Refresh the details
+      if (selectedSubscriptionId) {
+        fetchSubscriptionDetails(selectedSubscriptionId)
+      }
+    } catch (error) {
+      console.error("Error applying master domain:", error)
+      setDetailsNotice({ type: "error", text: "Failed to apply master domain" })
+    } finally {
+      setApplyingMasterDomain(false)
+    }
   }
 
   const handleDetailsDialogChange = (open: boolean) => {
@@ -1080,6 +1161,30 @@ export default function AdminGondola() {
                       {exportingNameservers ? "Exporting..." : "Export Nameservers"}
                     </Button>
                   </div>
+                  {/* Master domain controls */}
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end mt-2">
+                    <div className="flex-1">
+                      <label htmlFor="adminMasterDomain" className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Master Domain
+                      </label>
+                      <input
+                        id="adminMasterDomain"
+                        type="text"
+                        value={adminMasterDomain}
+                        onChange={(e) => setAdminMasterDomain(e.target.value)}
+                        placeholder="e.g. example.com"
+                        className="mt-1 w-full px-2 py-1 border border-gray-300 rounded-md text-sm font-mono"
+                        disabled={applyingMasterDomain}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={handleApplyMasterDomain}
+                      disabled={applyingMasterDomain || selectedDomainIds.size === 0 || !adminMasterDomain.trim()}
+                    >
+                      {applyingMasterDomain ? "Applying..." : `Apply to ${selectedDomainIds.size} selected`}
+                    </Button>
+                  </div>
                 </div>
                 {subscriptionDetails.domains.length === 0 ? (
                   <p className="text-sm text-gray-500">No domains linked to this subscription.</p>
@@ -1088,6 +1193,14 @@ export default function AdminGondola() {
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
                         <tr>
+                          <th className="px-3 py-2 text-center w-8">
+                            <input
+                              type="checkbox"
+                              checked={subscriptionDetails ? selectedDomainIds.size === subscriptionDetails.domains.length && subscriptionDetails.domains.length > 0 : false}
+                              onChange={toggleAllDomains}
+                              className="rounded border-gray-300"
+                            />
+                          </th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
                             Domain
                           </th>
@@ -1095,7 +1208,13 @@ export default function AdminGondola() {
                             Status
                           </th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
-                            DNS Configured
+                            DNS
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
+                            Master Domain
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
+                            Redirect
                           </th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
                             Added
@@ -1113,6 +1232,14 @@ export default function AdminGondola() {
                           return (
                             <Fragment key={domain.id}>
                               <tr className="hover:bg-gray-50">
+                                <td className="px-3 py-2 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedDomainIds.has(domain.id)}
+                                    onChange={() => toggleDomainSelection(domain.id)}
+                                    className="rounded border-gray-300"
+                                  />
+                                </td>
                                 <td className="px-3 py-2">
                                   <button
                                     type="button"
@@ -1130,13 +1257,15 @@ export default function AdminGondola() {
                                 </td>
                                 <td className="px-3 py-2 capitalize">{domain.cloudflareStatus}</td>
                                 <td className="px-3 py-2">{domain.dnsConfigured ? "Yes" : "No"}</td>
+                                <td className="px-3 py-2 font-mono text-xs text-gray-600">{domain.masterDomain || "—"}</td>
+                                <td className="px-3 py-2">{domain.redirectConfigured ? <span className="text-green-600 text-xs font-medium">Yes</span> : <span className="text-gray-400 text-xs">No</span>}</td>
                                 <td className="px-3 py-2 text-gray-500">
                                   {new Date(domain.createdAt).toLocaleString()}
                                 </td>
                               </tr>
                               {isExpanded && (
                                 <tr className="bg-gray-50">
-                                  <td colSpan={4} className="px-4 py-4 text-sm">
+                                  <td colSpan={7} className="px-4 py-4 text-sm">
                                     <div className="flex flex-col gap-4">
                                       <div>
                                         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
