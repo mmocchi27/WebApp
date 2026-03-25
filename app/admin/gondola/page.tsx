@@ -414,15 +414,15 @@ export default function AdminGondola() {
       }
 
       const redirectInfo = data.redirects
-      let message = \`Master domain set to "${data.masterDomain}" for \${data.updated} domain(s).\`
+      let message = `Master domain set to "${data.masterDomain}" for ${data.updated} domain(s).`
       if (redirectInfo?.configured !== undefined) {
-        message += \` Redirects configured: \${redirectInfo.configured}/\${redirectInfo.processed}.\`
+        message += ` Redirects configured: ${redirectInfo.configured}/${redirectInfo.processed}.`
       }
       if (redirectInfo?.results) {
         const skipped = redirectInfo.results.filter((r: any) => r.status === "skipped")
         const errors = redirectInfo.results.filter((r: any) => r.status === "error")
-        if (skipped.length > 0) message += \` \${skipped.length} skipped.\`
-        if (errors.length > 0) message += \` \${errors.length} failed.\`
+        if (skipped.length > 0) message += ` ${skipped.length} skipped.`
+        if (errors.length > 0) message += ` ${errors.length} failed.`
       }
 
       setDetailsNotice({ type: "success", text: message })
