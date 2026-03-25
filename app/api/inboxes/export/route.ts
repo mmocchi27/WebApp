@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import { prisma } from "@/lib/prisma"
 import { decryptSecret } from "@/lib/encryption"
+
+async function isAdmin(userId: string): Promise<boolean> {
+  try {
+    const client = await clerkClient()
+    const user = await client.users.getUser(userId)
+    const userEmail = user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress
+    const adminEmail = process.env.ADMIN_EMAIL || 'mitch@mailmountains.com'
+    return userEmail === adminEmail
+  } catch {
+    return false
+  }
+}
 
 type ExportDestination = "Instantly" | "Smartlead"
 
@@ -69,7 +81,8 @@ export async function POST(request: NextRequest) {
       server = await prisma.server.findFirst({ where: { subscriptionId: serverId } })
     }
 
-    if (!server || server.organizationId !== orgId) {
+    const admin = await isAdmin(userId)
+    if (!server || (!admin && server.organizationId !== orgId)) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
     }
 
