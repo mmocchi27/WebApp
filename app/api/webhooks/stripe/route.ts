@@ -100,8 +100,17 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     // Get the customer to find Clerk IDs (stored in customer metadata, not subscription)
     const customer = await stripe.customers.retrieve(subscription.customer as string)
     
-    const clerkOrgId = customer.metadata.clerkOrgId
-    const clerkUserId = customer.metadata.clerkUserId
+    // Check if customer is deleted
+    if ('deleted' in customer && customer.deleted) {
+      console.error(`❌ Customer ${subscription.customer} is deleted, cannot create server`)
+      return
+    }
+    
+    console.log(`[WEBHOOK-DEBUG] Customer metadata:`, JSON.stringify(customer.metadata))
+    console.log(`[WEBHOOK-DEBUG] Subscription metadata:`, JSON.stringify(subscription.metadata))
+    
+    const clerkOrgId = customer.metadata?.clerkOrgId
+    const clerkUserId = customer.metadata?.clerkUserId
 
     // Fetch the originating checkout session (for extra metadata)
     const sessions = await stripe.checkout.sessions.list({
@@ -111,16 +120,20 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     const checkoutSession = sessions.data[0]
 
     let organizationId = clerkOrgId || clerkUserId || null
+    console.log(`[WEBHOOK-DEBUG] Initial organizationId from customer: ${organizationId}`)
+    
     if (!organizationId) {
+      console.log(`[WEBHOOK-DEBUG] Checkout session metadata:`, JSON.stringify(checkoutSession?.metadata))
       organizationId =
         checkoutSession?.metadata?.clerkOrgId ||
         checkoutSession?.metadata?.clerkUserId ||
         null
+      console.log(`[WEBHOOK-DEBUG] organizationId from checkout session: ${organizationId}`)
     }
 
     if (!organizationId) {
-      console.log(
-        `No Clerk org/user ID found for subscription ${subscription.id}; skipping server creation`
+      console.error(
+        `❌ No Clerk org/user ID found for subscription ${subscription.id}; skipping server creation. Customer: ${subscription.customer}`
       )
       return
     }
@@ -154,7 +167,13 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
     }
 
     // Create a server record in the database
-    await prisma.server.create({
+    console.log(`[WEBHOOK-DEBUG] Creating server with:`, {
+      subscriptionId: subscription.id,
+      organizationId,
+      serverName
+    })
+    
+    const newServer = await prisma.server.create({
       data: {
         subscriptionId: subscription.id,
         organizationId: organizationId,
@@ -165,9 +184,10 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
       }
     })
     
-    console.log(`✅ Server record created for subscription ${subscription.id} with name: ${serverName}`)
-  } catch (error) {
-    console.error('❌ Error creating server record:', error)
+    console.log(`✅ Server record created for subscription ${subscription.id} with ID: ${newServer.id}, name: ${serverName}`)
+  } catch (error: any) {
+    console.error('❌ Error creating server record:', error?.message || error)
+    console.error('❌ Full error:', JSON.stringify(error, null, 2))
   }
 }
 
