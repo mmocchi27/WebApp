@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -127,6 +127,9 @@ export default function AdminGondola() {
   const [checkingDomainStatus, setCheckingDomainStatus] = useState(false)
   const [checkingIPStatus, setCheckingIPStatus] = useState<string | null>(null)
   const [clearingServer, setClearingServer] = useState<string | null>(null)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  const [clearConfirmTarget, setClearConfirmTarget] = useState<{ id: string; name: string | null } | null>(null)
+  const [clearProgress, setClearProgress] = useState(0)
   const [resettingDns, setResettingDns] = useState(false)
   const [resettingSingleDomain, setResettingSingleDomain] = useState<string | null>(null)
   const [selectedDomainIds, setSelectedDomainIds] = useState<Set<string>>(new Set())
@@ -720,42 +723,65 @@ export default function AdminGondola() {
     }
   }
 
-  const handleClearServer = async (serverId: string, serverName: string | null) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to clear all domains and inboxes from server "${serverName || serverId}"?\n\nThis will:\n- Delete all domains from Cloudflare and MailCow\n- Delete all inboxes from MailCow\n- Remove all domain and inbox records from the database\n\nThis action cannot be undone.`
-    )
+  const handleClearServer = (serverId: string, serverName: string | null) => {
+    setClearConfirmTarget({ id: serverId, name: serverName })
+    setClearConfirmOpen(true)
+  }
 
-    if (!confirmed) return
+  const handleConfirmClear = async () => {
+    if (!clearConfirmTarget) return
+    const { id: serverId } = clearConfirmTarget
 
+    setClearConfirmOpen(false)
     setClearingServer(serverId)
+    setClearProgress(0)
     setTableError(null)
+
+    // Animate progress: fast to 40%, slow to 85%, stalls there until API returns
+    let current = 0
+    const interval = setInterval(() => {
+      current += current < 40 ? 4 : current < 70 ? 2 : 0.5
+      if (current >= 85) {
+        clearInterval(interval)
+        current = 85
+      }
+      setClearProgress(Math.min(current, 85))
+    }, 300)
 
     try {
       const response = await fetch('/api/admin/clear-server', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ serverId }),
       })
+
+      clearInterval(interval)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         setTableError(errorData.error || 'Failed to clear server')
+        setClearProgress(0)
         return
       }
 
-      // Refresh servers to show updated state
+      // Slam to 100% on success
+      setClearProgress(100)
+      await new Promise(resolve => setTimeout(resolve, 600))
+
       if (currentOrgId) {
         await fetchServers(currentOrgId)
       }
 
       setTableError(null)
     } catch (error) {
+      clearInterval(interval)
       console.error('Error clearing server:', error)
       setTableError('Failed to clear server. Please try again.')
+      setClearProgress(0)
     } finally {
       setClearingServer(null)
+      setClearProgress(0)
+      setClearConfirmTarget(null)
     }
   }
 
@@ -1162,15 +1188,30 @@ export default function AdminGondola() {
                                 >
                                   {checkingIPStatus === server.id ? 'Checking...' : 'Check IP Status'}
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => void handleClearServer(server.id, server.serverName)}
-                                  disabled={clearingServer === server.id}
-                                  className="mt-1 text-xs"
-                                >
-                                  {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
-                                </Button>
+                                {clearingServer === server.id ? (
+                                  <div className="mt-1 w-full">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-xs text-blue-600 font-medium">Clearing server…</span>
+                                      <span className="text-xs text-gray-500">{Math.round(clearProgress)}%</span>
+                                    </div>
+                                    <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full bg-blue-600 transition-all duration-300 ease-out"
+                                        style={{ width: `${clearProgress}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleClearServer(server.id, server.serverName)}
+                                    disabled={!!clearingServer}
+                                    className="mt-1 text-xs"
+                                  >
+                                    Clear Server
+                                  </Button>
+                                )}
                                 {server.blacklists && server.blacklists.length > 0 && (
                                   <details className="mt-1">
                                     <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">
@@ -1219,6 +1260,48 @@ export default function AdminGondola() {
           </Card>
         )}
       </div>
+
+      {/* Clear Server Confirmation Dialog */}
+      <Dialog open={clearConfirmOpen} onOpenChange={(open) => { if (!open) setClearConfirmOpen(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <DialogTitle className="text-gray-900">Clear Server</DialogTitle>
+            </div>
+            <DialogDescription className="text-gray-600 text-sm leading-relaxed">
+              Are you sure you want to clear{" "}
+              <span className="font-semibold text-gray-900">
+                {clearConfirmTarget?.name || clearConfirmTarget?.id || "this server"}
+              </span>
+              ?
+              <br /><br />
+              This will permanently delete all domains from Cloudflare and MailCow, all inboxes from MailCow, and all records from the database.{" "}
+              <span className="font-semibold text-red-600">This cannot be undone.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:justify-end mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setClearConfirmOpen(false)}
+              className="flex-1 sm:flex-none"
+            >
+              No, cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void handleConfirmClear()}
+              className="flex-1 sm:flex-none"
+            >
+              Yes, clear server
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={detailsDialogOpen} onOpenChange={handleDetailsDialogChange}>
         <DialogContent className="sm:max-w-[95vw] lg:max-w-[90vw] max-h-[95vh] overflow-y-auto">
