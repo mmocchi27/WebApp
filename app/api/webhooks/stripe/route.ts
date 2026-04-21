@@ -4,19 +4,38 @@ import { headers } from "next/headers"
 import { prisma } from "@/lib/prisma"
 import { cleanupSubscriptionResources } from "@/lib/serverCleanup"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-07-30.basil",
-})
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+// #region agent log
+console.log('[DEBUG-MODULE] stripe-webhook module loaded, STRIPE_SECRET_KEY exists:', !!process.env.STRIPE_SECRET_KEY, ', STRIPE_WEBHOOK_SECRET exists:', !!process.env.STRIPE_WEBHOOK_SECRET)
+// #endregion
 
 // Make this route publicly accessible (no auth required)
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+// Module-level stripe instance for helper functions
+let _stripe: Stripe | null = null
+function getStripe() {
+  if (!_stripe) {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2025-07-30.basil",
+    })
+  }
+  return _stripe
+}
+
 export async function POST(request: NextRequest) {
+  // #region agent log
+  console.log('[DEBUG-HANDLER] POST handler called for stripe-webhook')
+  // #endregion
+  
   try {
+    // #region agent log
+    console.log('[DEBUG-HANDLER] Getting Stripe client and webhook secret')
+    // #endregion
+    const stripe = getStripe()
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
     const body = await request.text()
+    console.log("🔥 BODY READ COMPLETE")
     const headersList = await headers()
     const signature = headersList.get("stripe-signature")
 
@@ -75,6 +94,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
 async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   console.log("Subscription created:", subscription.id)
+  const stripe = getStripe()
   
   try {
     // Get the customer to find Clerk IDs (stored in customer metadata, not subscription)
@@ -158,7 +178,27 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     const status = subscription.status
     const cancelAtPeriodEnd = subscription.cancel_at_period_end
 
-    if (cancelAtPeriodEnd || status === "canceled" || status === "unpaid" || status === "incomplete_expired") {
+    // Handle unpaid status separately - mark as unpaid (recoverable) not cancelled
+    if (status === "unpaid") {
+      console.log(`Subscription ${subscription.id} is unpaid – marking server as unpaid`)
+
+      const result = await prisma.server.updateMany({
+        where: { subscriptionId: subscription.id },
+        data: {
+          status: "unpaid",
+          updatedAt: new Date(),
+        },
+      })
+
+      if (result.count > 0) {
+        console.log(`✅ Server status updated to 'unpaid' for subscription ${subscription.id}`)
+      } else {
+        console.log(`⚠️  No server found for subscription ${subscription.id}`)
+      }
+    }
+
+    // Handle terminal cancellation states
+    if (cancelAtPeriodEnd || status === "canceled" || status === "incomplete_expired") {
       console.log(`Subscription ${subscription.id} is ${status} (cancel_at_period_end=${cancelAtPeriodEnd}) – updating server status`)
 
       const result = await prisma.server.updateMany({

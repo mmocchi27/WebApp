@@ -10,8 +10,7 @@ async function isAdmin(userId: string): Promise<boolean> {
     const userEmail = user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress
     const adminEmail = process.env.ADMIN_EMAIL || 'mitch@mailmountains.com'
     return userEmail === adminEmail
-  } catch (error) {
-    console.error('Error checking admin status:', error)
+  } catch {
     return false
   }
 }
@@ -83,9 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userIsAdmin = await isAdmin(userId)
-    
-    // Allow access if: server exists AND (org matches OR user is admin)
-    if (!server || (server.organizationId !== orgId && !userIsAdmin)) {
+    if (!server || (!userIsAdmin && server.organizationId !== orgId)) {
       return NextResponse.json({ error: "Server not found" }, { status: 404 })
     }
 

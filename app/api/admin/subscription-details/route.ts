@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
             spfRecord: true,
             dmarcRecord: true,
             dkimRecord: true,
+            masterDomain: true,
+            redirectConfigured: true,
             createdAt: true,
             updatedAt: true,
           },

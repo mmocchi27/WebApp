@@ -52,6 +52,8 @@ interface DomainRecord {
   spfRecord: string | null
   dmarcRecord: string | null
   dkimRecord: string | null
+  masterDomain: string | null
+  redirectConfigured: boolean
   createdAt: string
   updatedAt: string
 }
@@ -101,6 +103,8 @@ export default function AdminGondola() {
   const { organization } = useOrganization()
   const router = useRouter()
   const [servers, setServers] = useState<Server[]>([])
+  const [cancelledServers, setCancelledServers] = useState<Server[]>([])
+  const [serverTab, setServerTab] = useState<"active" | "cancelled">("active")
   const [loading, setLoading] = useState(false)
   const lastOrgIdRef = useRef<string | null>(null)
   const [formData, setFormData] = useState<Record<string, ServerFormState>>({})
@@ -127,6 +131,8 @@ export default function AdminGondola() {
   const [resettingSingleDomain, setResettingSingleDomain] = useState<string | null>(null)
   const [selectedDomainIds, setSelectedDomainIds] = useState<Set<string>>(new Set())
   const [resetMasterDomain, setResetMasterDomain] = useState("")
+  const [adminMasterDomain, setAdminMasterDomain] = useState("")
+  const [applyingMasterDomain, setApplyingMasterDomain] = useState(false)
 
   // Force page refresh when org changes
   useEffect(() => {
@@ -159,18 +165,11 @@ export default function AdminGondola() {
     setHasSearched(true)
 
     try {
-      // Determine if it's an org ID (starts with org_), subscription ID (starts with sub_), or IP address
+      // Determine if it's an org ID (starts with org_) or subscription ID (starts with sub_)
       const isSubscriptionId = query.startsWith('sub_')
-      const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(query.trim())
-      
-      let url: string
-      if (isSubscriptionId) {
-        url = `/api/admin/servers?subscriptionId=${encodeURIComponent(query)}`
-      } else if (isIPAddress) {
-        url = `/api/admin/servers?ipAddress=${encodeURIComponent(query)}`
-      } else {
-        url = `/api/admin/servers?orgId=${encodeURIComponent(query)}`
-      }
+      const url = isSubscriptionId 
+        ? `/api/admin/servers?subscriptionId=${encodeURIComponent(query)}`
+        : `/api/admin/servers?orgId=${encodeURIComponent(query)}`
       
       const response = await fetch(url)
       if (!response.ok) {
@@ -182,15 +181,22 @@ export default function AdminGondola() {
       }
 
       const data = await response.json()
-      const filteredServers: Server[] = (data.servers || []).filter((server: Server) => {
-        const normalizedStatus = server.status?.toLowerCase()
-        return normalizedStatus === 'active' || normalizedStatus === 'pending' || normalizedStatus === 'suspended'
+      const allServers: Server[] = data.servers || []
+
+      const activeServers: Server[] = allServers.filter((server: Server) => {
+        const s = server.status?.toLowerCase()
+        return s === 'active' || s === 'pending' || s === 'unpaid'
+      })
+      const cancelledServersList: Server[] = allServers.filter((server: Server) => {
+        const s = server.status?.toLowerCase()
+        return s === 'cancelled' || s === 'canceled'
       })
 
-      setServers(filteredServers)
+      setServers(activeServers)
+      setCancelledServers(cancelledServersList)
 
       const nextFormData: Record<string, ServerFormState> = {}
-      filteredServers.forEach((server: Server) => {
+      allServers.forEach((server: Server) => {
         nextFormData[server.id] = {
           serverName: server.serverName || '',
           ipAddress: server.ipAddress || '',
@@ -364,7 +370,82 @@ export default function AdminGondola() {
     setResettingDns(false)
     setSelectedDomainIds(new Set())
     setResetMasterDomain("")
+    setAdminMasterDomain("")
+    setApplyingMasterDomain(false)
     fetchSubscriptionDetails(subscriptionId)
+  }
+
+  const toggleDomainSelection = (domainId: string) => {
+    setSelectedDomainIds(prev => {
+      const next = new Set(prev)
+      if (next.has(domainId)) next.delete(domainId)
+      else next.add(domainId)
+      return next
+    })
+  }
+
+  const toggleAllDomains = () => {
+    if (!subscriptionDetails) return
+    const allIds = subscriptionDetails.domains.map(d => d.id)
+    if (selectedDomainIds.size === allIds.length) {
+      setSelectedDomainIds(new Set())
+    } else {
+      setSelectedDomainIds(new Set(allIds))
+    }
+  }
+
+  const handleApplyMasterDomain = async () => {
+    if (!subscriptionDetails || !adminMasterDomain.trim() || selectedDomainIds.size === 0) return
+    setApplyingMasterDomain(true)
+    setDetailsNotice(null)
+
+    const selectedDomains = subscriptionDetails.domains.filter(d => selectedDomainIds.has(d.id))
+    const domainNames = selectedDomains.map(d => d.domainName)
+
+    try {
+      const response = await fetch("/api/admin/master-domain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serverId: subscriptionDetails.server.id,
+          masterDomain: adminMasterDomain.trim(),
+          domainNames,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setDetailsNotice({ type: "error", text: data.error || "Failed to apply master domain" })
+        return
+      }
+
+      const redirectInfo = data.redirects
+      let message = `Master domain set to "${data.masterDomain}" for ${data.updated} domain(s).`
+      if (redirectInfo?.configured !== undefined) {
+        message += ` Redirects configured: ${redirectInfo.configured}/${redirectInfo.processed}.`
+      }
+      if (redirectInfo?.results) {
+        const skipped = redirectInfo.results.filter((r: any) => r.status === "skipped")
+        const errors = redirectInfo.results.filter((r: any) => r.status === "error")
+        if (skipped.length > 0) message += ` ${skipped.length} skipped.`
+        if (errors.length > 0) message += ` ${errors.length} failed.`
+      }
+
+      setDetailsNotice({ type: "success", text: message })
+      setSelectedDomainIds(new Set())
+      setAdminMasterDomain("")
+
+      // Refresh the details
+      if (selectedSubscriptionId) {
+        fetchSubscriptionDetails(selectedSubscriptionId)
+      }
+    } catch (error) {
+      console.error("Error applying master domain:", error)
+      setDetailsNotice({ type: "error", text: "Failed to apply master domain" })
+    } finally {
+      setApplyingMasterDomain(false)
+    }
   }
 
   const handleDetailsDialogChange = (open: boolean) => {
@@ -736,7 +817,7 @@ export default function AdminGondola() {
   const handleQuerySubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!queryOrgId.trim()) {
-      setOrgInputError("Organization ID, Subscription ID, or IP Address is required")
+      setOrgInputError("Organization ID or Subscription ID is required")
       return
     }
 
@@ -808,10 +889,10 @@ export default function AdminGondola() {
               <CardContent className="pt-6">
                 <form onSubmit={handleQuerySubmit} className="flex flex-col gap-4 md:flex-row md:items-end">
                   <div className="flex-1">
-                    <Label htmlFor="orgId">Organization ID, Subscription ID, or IP Address</Label>
+                    <Label htmlFor="orgId">Organization ID or Subscription ID</Label>
                     <Input
                       id="orgId"
-                      placeholder="org_35fvmZQfMIl9YuY6mFJ13r9Bq8o, sub_1ABC..., or 192.168.1.1"
+                      placeholder="org_35fvmZQfMIl9YuY6mFJ13r9Bq8o or sub_1ABC..."
                       value={queryOrgId}
                       onChange={(e) => setQueryOrgId(e.target.value)}
                       autoComplete="off"
@@ -857,11 +938,43 @@ export default function AdminGondola() {
                 <div className="py-12 text-center">
                   <p className="text-red-600">{fetchError}</p>
                 </div>
-              ) : servers.length === 0 ? (
+              ) : servers.length === 0 && cancelledServers.length === 0 ? (
                 <div className="py-12 text-center">
-                  <p className="text-gray-500">No active, pending, or suspended servers found for {currentOrgId || 'your search'}.</p>
+                  <p className="text-gray-500">No servers found for {currentOrgId || 'your search'}.</p>
                 </div>
               ) : (
+                <div>
+                  <div className="flex space-x-4 px-4 pt-3 border-b border-gray-200">
+                    <button
+                      onClick={() => setServerTab("active")}
+                      className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                        serverTab === "active"
+                          ? "border-blue-600 text-blue-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      Active / Pending / Unpaid ({servers.length})
+                    </button>
+                    <button
+                      onClick={() => setServerTab("cancelled")}
+                      className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                        serverTab === "cancelled"
+                          ? "border-red-600 text-red-600"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      Cancelled ({cancelledServers.length})
+                    </button>
+                  </div>
+                  {serverTab === "active" && servers.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <p className="text-gray-500">No active, pending, or unpaid servers found for {currentOrgId || 'your search'}.</p>
+                    </div>
+                  ) : serverTab === "cancelled" && cancelledServers.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <p className="text-gray-500">No cancelled servers found for {currentOrgId || 'your search'}.</p>
+                    </div>
+                  ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
@@ -879,12 +992,11 @@ export default function AdminGondola() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Blacklist Status</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Updated At</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {servers.map((server) => (
-                        <tr key={server.id} className="hover:bg-gray-50">
+                      {(serverTab === "active" ? servers : cancelledServers).map((server) => (
+                        <tr key={server.id} className={`hover:bg-gray-50 ${serverTab === "cancelled" ? "bg-red-50/30" : ""}`}>
                           <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[100px]">{server.id}</td>
                           <td className="px-2 py-3 text-xs font-mono text-gray-900 break-all max-w-[120px]">
                             <button
@@ -974,7 +1086,9 @@ export default function AdminGondola() {
                             >
                               <option value="pending">Pending</option>
                               <option value="active">Active</option>
+                              <option value="unpaid">Unpaid</option>
                               <option value="suspended">Suspended</option>
+                              <option value="cancelled">Cancelled</option>
                             </select>
                           </td>
                           <td className="px-4 py-3 text-sm">
@@ -1048,6 +1162,15 @@ export default function AdminGondola() {
                                 >
                                   {checkingIPStatus === server.id ? 'Checking...' : 'Check IP Status'}
                                 </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => void handleClearServer(server.id, server.serverName)}
+                                  disabled={clearingServer === server.id}
+                                  className="mt-1 text-xs"
+                                >
+                                  {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
+                                </Button>
                                 {server.blacklists && server.blacklists.length > 0 && (
                                   <details className="mt-1">
                                     <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">
@@ -1079,21 +1202,12 @@ export default function AdminGondola() {
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.createdAt).toLocaleString()}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{new Date(server.updatedAt).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-sm">
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => void handleClearServer(server.id, server.serverName)}
-                              disabled={clearingServer === server.id}
-                              className="text-xs"
-                            >
-                              {clearingServer === server.id ? 'Clearing...' : 'Clear Server'}
-                            </Button>
-                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -1216,6 +1330,30 @@ export default function AdminGondola() {
                       }
                     </Button>
                   </div>
+                  {/* Master domain controls */}
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end mt-2">
+                    <div className="flex-1">
+                      <label htmlFor="adminMasterDomain" className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Master Domain
+                      </label>
+                      <input
+                        id="adminMasterDomain"
+                        type="text"
+                        value={adminMasterDomain}
+                        onChange={(e) => setAdminMasterDomain(e.target.value)}
+                        placeholder="e.g. example.com"
+                        className="mt-1 w-full px-2 py-1 border border-gray-300 rounded-md text-sm font-mono"
+                        disabled={applyingMasterDomain}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={handleApplyMasterDomain}
+                      disabled={applyingMasterDomain || selectedDomainIds.size === 0 || !adminMasterDomain.trim()}
+                    >
+                      {applyingMasterDomain ? "Applying..." : `Apply to ${selectedDomainIds.size} selected`}
+                    </Button>
+                  </div>
                 </div>
                 {subscriptionDetails.domains.length === 0 ? (
                   <p className="text-sm text-gray-500">No domains linked to this subscription.</p>
@@ -1239,7 +1377,13 @@ export default function AdminGondola() {
                             Status
                           </th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
-                            DNS Configured
+                            DNS
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
+                            Master Domain
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
+                            Redirect
                           </th>
                           <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider text-xs">
                             Added
@@ -1283,13 +1427,15 @@ export default function AdminGondola() {
                                 </td>
                                 <td className="px-3 py-2 capitalize">{domain.cloudflareStatus}</td>
                                 <td className="px-3 py-2">{domain.dnsConfigured ? "Yes" : "No"}</td>
+                                <td className="px-3 py-2 font-mono text-xs text-gray-600">{domain.masterDomain || "—"}</td>
+                                <td className="px-3 py-2">{domain.redirectConfigured ? <span className="text-green-600 text-xs font-medium">Yes</span> : <span className="text-gray-400 text-xs">No</span>}</td>
                                 <td className="px-3 py-2 text-gray-500">
                                   {new Date(domain.createdAt).toLocaleString()}
                                 </td>
                               </tr>
                               {isExpanded && (
                                 <tr className="bg-gray-50">
-                                  <td colSpan={5} className="px-4 py-4 text-sm">
+                                  <td colSpan={7} className="px-4 py-4 text-sm">
                                     <div className="flex flex-col gap-4">
                                       <div>
                                         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">

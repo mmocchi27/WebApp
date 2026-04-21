@@ -144,7 +144,6 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const orgId = searchParams.get("orgId")?.trim()
     const subscriptionId = searchParams.get("subscriptionId")?.trim()
-    const ipAddress = searchParams.get("ipAddress")?.trim()
 
     // Build where clause based on which parameter is provided
     let whereClause: any = undefined
@@ -152,8 +151,6 @@ export async function GET(request: NextRequest) {
       whereClause = { subscriptionId: subscriptionId }
     } else if (orgId) {
       whereClause = { organizationId: orgId }
-    } else if (ipAddress) {
-      whereClause = { ipAddress: ipAddress }
     }
 
     const servers = await prisma.server.findMany({
@@ -163,14 +160,8 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const filteredServers = (orgId || subscriptionId || ipAddress)
-      ? servers.filter(server => {
-          const normalizedStatus = server.status?.toLowerCase()
-          return normalizedStatus === 'active' || normalizedStatus === 'pending' || normalizedStatus === 'suspended'
-        })
-      : servers
-
-    return NextResponse.json({ servers: filteredServers })
+    // Return all servers - let the frontend handle filtering by status
+    return NextResponse.json({ servers })
   } catch (error) {
     console.error("Error fetching all servers:", error)
     return NextResponse.json({ error: "Failed to fetch servers" }, { status: 500 })
