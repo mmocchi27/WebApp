@@ -58,9 +58,9 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // No serverId — return all servers for the selector
+    // No serverId — return active servers only for the selector
     const servers = await prisma.server.findMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, status: "active" },
       orderBy: { createdAt: "desc" },
     })
 
