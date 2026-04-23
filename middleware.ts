@@ -13,6 +13,8 @@ const isProtectedRoute = createRouteMatcher([
   "/billing/(.*)",
   "/admin/gondola",
   "/admin/gondola/(.*)",
+  "/admin/shadow",
+  "/admin/shadow/(.*)",
   "/domains",
   "/domains/(.*)",
   "/inboxes",
@@ -29,6 +31,7 @@ const validPathPatterns = [
   /^\/inboxes/,                 // Inboxes page
   /^\/user-management/,         // User management
   /^\/admin\/gondola/,          // Admin gondola (your actual admin)
+  /^\/admin\/shadow/,           // Admin shadow session
   /^\/sign-in/,                 // Sign in
   /^\/sign-up/,                 // Sign up
   /^\/api\//,                   // API routes

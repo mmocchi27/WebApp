@@ -945,6 +945,22 @@ export default function AdminGondola() {
                         Clear
                       </Button>
                     )}
+                    {hasSearched && !loading && (servers.length > 0 || cancelledServers.length > 0) && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const shadowOrgId = currentOrgId && !currentOrgId.startsWith('sub_')
+                            ? currentOrgId
+                            : (servers[0]?.organizationId || cancelledServers[0]?.organizationId)
+                          if (shadowOrgId) {
+                            window.open(`/admin/shadow/${shadowOrgId}/servers`, '_blank')
+                          }
+                        }}
+                        className="bg-orange-500 hover:bg-orange-600 text-white"
+                      >
+                        Shadow Session
+                      </Button>
+                    )}
                   </div>
                 </form>
               </CardContent>
