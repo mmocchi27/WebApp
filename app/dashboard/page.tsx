@@ -1,10 +1,23 @@
 "use client"
 
-import { useUser, useOrganization, OrganizationSwitcher } from "@clerk/nextjs"
+import { useUser, useOrganization, OrganizationSwitcher, CreateOrganization } from "@clerk/nextjs"
 import { UserButton } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
 import { useRef, useEffect } from "react"
+
+const Logo = ({ onClick }: { onClick: () => void }) => (
+  <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={onClick}>
+    <svg width="32" height="24" viewBox="0 0 32 24" className="flex-shrink-0">
+      <path d="M0 24L8 8L16 16L24 4L32 20V24H0Z" fill="#2563eb" opacity="0.8" />
+      <path d="M4 24L12 12L20 18L28 8L32 16V24H4Z" fill="#1d4ed8" />
+      <rect x="12" y="10" width="8" height="6" rx="1" fill="white" stroke="#1d4ed8" strokeWidth="0.5" />
+      <path d="M12 11L16 13L20 11" stroke="#1d4ed8" strokeWidth="0.5" fill="none" />
+    </svg>
+    <span className="font-semibold text-gray-900">MailMountains</span>
+  </div>
+)
 
 export default function Dashboard() {
   const { user } = useUser()
@@ -29,6 +42,38 @@ export default function Dashboard() {
     )
   }
 
+  // No org — prompt to create one
+  if (!organization) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+        <div className="mb-8">
+          <Logo onClick={() => router.push("/")} />
+        </div>
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-8 pb-6 flex flex-col items-center text-center">
+            <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-7 h-7 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Create your organization</h1>
+            <p className="text-gray-500 text-sm mb-6">
+              Set up your organization to get started with MailMountains.
+            </p>
+            <CreateOrganization
+              afterCreateOrganizationUrl="/dashboard"
+              skipInvitationScreen={true}
+            />
+          </CardContent>
+        </Card>
+        <div className="mt-4">
+          <UserButton afterSignOutUrl="/" />
+        </div>
+      </div>
+    )
+  }
+
+  // Has org — show dashboard
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <div className="w-64 bg-white border-r border-gray-200 min-h-screen" />
@@ -38,18 +83,7 @@ export default function Dashboard() {
 
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
-            <div
-              className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={() => router.push("/")}
-            >
-              <svg width="32" height="24" viewBox="0 0 32 24" className="flex-shrink-0">
-                <path d="M0 24L8 8L16 16L24 4L32 20V24H0Z" fill="#2563eb" opacity="0.8" />
-                <path d="M4 24L12 12L20 18L28 8L32 16V24H0Z" fill="#1d4ed8" />
-                <rect x="12" y="10" width="8" height="6" rx="1" fill="white" stroke="#1d4ed8" strokeWidth="0.5" />
-                <path d="M12 11L16 13L20 11" stroke="#1d4ed8" strokeWidth="0.5" fill="none" />
-              </svg>
-              <span className="font-semibold text-gray-900">MailMountains</span>
-            </div>
+            <Logo onClick={() => router.push("/")} />
             <div className="flex items-center gap-4">
               <OrganizationSwitcher
                 hidePersonal={true}
@@ -65,9 +99,7 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold text-gray-900">
               Welcome{user?.firstName ? `, ${user.firstName}` : ""}
             </h1>
-            {organization && (
-              <p className="text-gray-500 mt-2">{organization.name}</p>
-            )}
+            <p className="text-gray-500 mt-2">{organization.name}</p>
           </div>
 
         </div>
