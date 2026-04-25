@@ -3,17 +3,21 @@ import { Webhook } from "svix"
 import { getSupabase } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
+  console.log("[clerk-webhook] Received request")
+
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET
   if (!webhookSecret) {
+    console.error("[clerk-webhook] CLERK_WEBHOOK_SECRET is not set")
     return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 })
   }
+  console.log("[clerk-webhook] Webhook secret found")
 
-  // Verify the webhook signature via svix
   const svixId = request.headers.get("svix-id")
   const svixTimestamp = request.headers.get("svix-timestamp")
   const svixSignature = request.headers.get("svix-signature")
 
   if (!svixId || !svixTimestamp || !svixSignature) {
+    console.error("[clerk-webhook] Missing svix headers")
     return NextResponse.json({ error: "Missing svix headers" }, { status: 400 })
   }
 
@@ -27,7 +31,9 @@ export async function POST(request: NextRequest) {
       "svix-timestamp": svixTimestamp,
       "svix-signature": svixSignature,
     })
-  } catch {
+    console.log("[clerk-webhook] Signature verified, event type:", event.type)
+  } catch (err) {
+    console.error("[clerk-webhook] Signature verification failed:", err)
     return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 })
   }
 
@@ -35,6 +41,8 @@ export async function POST(request: NextRequest) {
   const data = event.data
 
   try {
+    console.log("[clerk-webhook] Supabase URL set:", !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+    console.log("[clerk-webhook] Supabase key set:", !!process.env.SUPABASE_SERVICE_ROLE_KEY)
     switch (eventType) {
       // A user joined an organization
       case "organizationMembership.created": {
