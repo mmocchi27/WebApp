@@ -409,28 +409,6 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* Top Left Navigation Buttons */}
-      <div className="fixed top-8 left-8 flex flex-col gap-4">
-        <Button
-          onClick={() => router.push("/servers")}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
-        >
-          Servers
-        </Button>
-        <Button
-          onClick={() => router.push("/domains")}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
-        >
-          Domains
-        </Button>
-        <Button
-          onClick={() => router.push("/inboxes")}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
-        >
-          Inboxes
-        </Button>
-      </div>
-
       {/* Bottom Left Buttons */}
       <div className="fixed bottom-8 left-8 flex flex-col gap-4">
         <Button

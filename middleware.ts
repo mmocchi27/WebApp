@@ -3,8 +3,6 @@ import { NextResponse } from "next/server"
 
 // ONLY match your actual protected routes (not random paths with similar names)
 const isProtectedRoute = createRouteMatcher([
-  "/servers",
-  "/servers/(.*)",
   "/checkout",
   "/checkout/(.*)",
   "/user-management",
@@ -15,20 +13,13 @@ const isProtectedRoute = createRouteMatcher([
   "/admin/gondola/(.*)",
   "/admin/shadow",
   "/admin/shadow/(.*)",
-  "/domains",
-  "/domains/(.*)",
-  "/inboxes",
-  "/inboxes/(.*)",
 ])
 
 // Valid paths in your app - everything else gets 404
 const validPathPatterns = [
   /^\/$/,                       // Homepage
-  /^\/servers/,                 // Servers page
   /^\/checkout/,                // Checkout page
   /^\/billing/,                 // Billing page
-  /^\/domains/,                 // Domains page
-  /^\/inboxes/,                 // Inboxes page
   /^\/user-management/,         // User management
   /^\/admin\/gondola/,          // Admin gondola (your actual admin)
   /^\/admin\/shadow/,           // Admin shadow session
@@ -59,9 +50,8 @@ export default clerkMiddleware(async (auth, req) => {
   console.log(`[DEBUG-A] Middleware entry: path=${path}, method=${req.method}`)
   // #endregion
 
-  // Allow Stripe webhooks (and sign-in/up) to bypass Clerk auth
+  // Allow sign-in/up to bypass Clerk auth
   if (
-    path.startsWith("/api/webhooks/stripe") ||
     path.startsWith("/sign-in") ||
     path.startsWith("/sign-up")
   ) {
