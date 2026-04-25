@@ -12,3 +12,19 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model Organization {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String    @map("organization_id")
+  userId           String    @map("user_id")
+  organizationName String?   @map("organization_name")
+  userEmail        String?   @map("user_email")
+  userFullName     String?   @map("user_full_name")
+  role             String    @default("member")
+  lastSignInAt     DateTime? @map("last_sign_in_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, userId])
+  @@map("organizations")
+}

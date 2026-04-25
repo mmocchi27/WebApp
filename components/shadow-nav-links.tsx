@@ -7,12 +7,6 @@ interface ShadowNavLinksProps {
   orgId: string
 }
 
-const topLinks = [
-  { label: "Servers", segment: "servers" },
-  { label: "Domains", segment: "domains" },
-  { label: "Inboxes", segment: "inboxes" },
-]
-
 const bottomLinks = [
   { label: "Billing", segment: "billing" },
   { label: "User Management", segment: "user-management" },
@@ -44,13 +38,8 @@ export function ShadowNavLinks({ orgId }: ShadowNavLinksProps) {
   }
 
   return (
-    <>
-      <div className="fixed top-20 left-8 z-40 flex flex-col gap-4">
-        {topLinks.map(({ label, segment }) => navBtn(label, segment))}
-      </div>
-      <div className="fixed bottom-8 left-8 z-40 flex flex-col gap-4">
-        {bottomLinks.map(({ label, segment }) => navBtn(label, segment))}
-      </div>
-    </>
+    <div className="fixed top-20 left-8 z-40 flex flex-col gap-4">
+      {bottomLinks.map(({ label, segment }) => navBtn(label, segment))}
+    </div>
   )
 }

@@ -50,8 +50,9 @@ export default clerkMiddleware(async (auth, req) => {
   console.log(`[DEBUG-A] Middleware entry: path=${path}, method=${req.method}`)
   // #endregion
 
-  // Allow sign-in/up to bypass Clerk auth
+  // Allow webhooks and sign-in/up to bypass Clerk auth
   if (
+    path.startsWith("/api/webhooks/clerk") ||
     path.startsWith("/sign-in") ||
     path.startsWith("/sign-up")
   ) {

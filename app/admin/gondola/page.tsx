@@ -155,7 +155,7 @@ export default function AdminGondola() {
       
       if (userEmail !== adminEmail) {
         // Not an admin, redirect to servers page
-        router.push('/servers')
+        router.push('/billing')
         return
       }
     }
@@ -953,7 +953,7 @@ export default function AdminGondola() {
                             ? currentOrgId
                             : (servers[0]?.organizationId || cancelledServers[0]?.organizationId)
                           if (shadowOrgId) {
-                            window.open(`/admin/shadow/${shadowOrgId}/servers`, '_blank')
+                            window.open(`/admin/shadow/${shadowOrgId}/billing`, '_blank')
                           }
                         }}
                         className="bg-orange-500 hover:bg-orange-600 text-white"

@@ -26,7 +26,7 @@ export default async function ShadowLayout({
 }) {
   const { userId } = await auth()
   if (!userId || !(await isAdmin(userId))) {
-    redirect("/servers")
+    redirect("/admin/gondola")
   }
 
   const { orgId } = await params
