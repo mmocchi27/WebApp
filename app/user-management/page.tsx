@@ -412,6 +412,12 @@ export default function UserManagement() {
       {/* Bottom Left Buttons */}
       <div className="fixed bottom-8 left-8 flex flex-col gap-4">
         <Button
+          onClick={() => router.push("/dashboard")}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
+        >
+          Dashboard
+        </Button>
+        <Button
           onClick={() => router.push("/billing")}
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium shadow-lg w-[200px]"
         >

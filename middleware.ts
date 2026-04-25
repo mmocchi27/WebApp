@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 
 // ONLY match your actual protected routes (not random paths with similar names)
 const isProtectedRoute = createRouteMatcher([
+  "/dashboard",
+  "/dashboard/(.*)",
   "/checkout",
   "/checkout/(.*)",
   "/user-management",
@@ -18,6 +20,7 @@ const isProtectedRoute = createRouteMatcher([
 // Valid paths in your app - everything else gets 404
 const validPathPatterns = [
   /^\/$/,                       // Homepage
+  /^\/dashboard/,               // Dashboard
   /^\/checkout/,                // Checkout page
   /^\/billing/,                 // Billing page
   /^\/user-management/,         // User management

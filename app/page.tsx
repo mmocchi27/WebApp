@@ -49,7 +49,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4">
           <SignedOut key="signed-out">
-            <SignInButton mode="modal" forceRedirectUrl="/billing">
+            <SignInButton mode="modal" forceRedirectUrl="/dashboard">
               <Button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">Sign In</Button>
             </SignInButton>
           </SignedOut>
@@ -95,7 +95,7 @@ export default function Home() {
               </a>
             </Button>
             <SignedOut key="hero-signed-out">
-              <SignUpButton mode="modal" forceRedirectUrl="/billing">
+              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
                 <Button
                   variant="outline"
                   className="border-gray-300 text-gray-700 px-6 py-3 rounded-md bg-transparent hover:bg-gray-50"
@@ -110,7 +110,7 @@ export default function Home() {
                 className="border-gray-300 text-gray-700 px-6 py-3 rounded-md bg-transparent hover:bg-gray-50"
                 asChild
               >
-                <a href="/billing">Dashboard</a>
+                <a href="/dashboard">Dashboard</a>
               </Button>
             </SignedIn>
           </div>
