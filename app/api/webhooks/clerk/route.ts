@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Webhook } from "svix"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 
 export async function POST(request: NextRequest) {
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         const lastName: string = data.public_user_data.last_name || ""
         const role: string = data.role === "org:admin" ? "admin" : "member"
 
-        await supabase.from("organizations").upsert(
+        await getSupabase().from("organizations").upsert(
           {
             organization_id: orgId,
             user_id: userId,
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
         const userId: string = data.public_user_data.user_id
         const role: string = data.role === "org:admin" ? "admin" : "member"
 
-        await supabase
+        await getSupabase()
           .from("organizations")
           .update({ role, updated_at: new Date().toISOString() })
           .eq("organization_id", orgId)
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         const orgId: string = data.organization.id
         const userId: string = data.public_user_data.user_id
 
-        await supabase
+        await getSupabase()
           .from("organizations")
           .delete()
           .eq("organization_id", orgId)
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
         const orgId: string = data.id
         const orgName: string = data.name
 
-        await supabase
+        await getSupabase()
           .from("organizations")
           .update({ organization_name: orgName, updated_at: new Date().toISOString() })
           .eq("organization_id", orgId)
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       case "session.created": {
         const userId: string = data.user_id
 
-        await supabase
+        await getSupabase()
           .from("organizations")
           .update({ last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() })
           .eq("user_id", userId)
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
         const firstName: string = data.first_name || ""
         const lastName: string = data.last_name || ""
 
-        await supabase
+        await getSupabase()
           .from("organizations")
           .update({
             user_email: email,
